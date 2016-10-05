@@ -507,6 +507,7 @@ filegroups:
   build: test
   headers:
   - test/core/end2end/cq_verifier.h
+  - test/core/end2end/fake_resolver.h
   - test/core/end2end/fixtures/http_proxy.h
   - test/core/end2end/fixtures/proxy.h
   - test/core/iomgr/endpoint_tests.h
@@ -520,6 +521,7 @@ filegroups:
   - test/core/util/slice_splitter.h
   src:
   - test/core/end2end/cq_verifier.c
+  - test/core/end2end/fake_resolver.c
   - test/core/end2end/fixtures/http_proxy.c
   - test/core/end2end/fixtures/proxy.c
   - test/core/iomgr/endpoint_tests.c
@@ -3024,6 +3026,21 @@ targets:
   src:
   - test/cpp/qps/json_run_localhost.cc
   deps:
+  - grpc++_test_util
+  - grpc_test_util
+  - grpc++
+  - grpc
+  - gpr_test_util
+  - gpr
+  - grpc++_test_config
+- name: latency_vs_load
+  build: test
+  run: false
+  language: c++
+  src:
+  - test/cpp/qps/latency_vs_load.cc
+  deps:
+  - qps
   - grpc++_test_util
   - grpc_test_util
   - grpc++

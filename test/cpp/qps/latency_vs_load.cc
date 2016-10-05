@@ -30,7 +30,6 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
-
 #include <memory>
 #include <set>
 
@@ -50,29 +49,21 @@ DEFINE_string(scenarios_json, "",
               "JSON string containing an array of Scenario objects");
 DEFINE_bool(quit, false, "Quit the workers");
 
-DEFINE_bool(search, false, "Search for offered load setting that achieves targeted cpu load");
-
 DEFINE_double(initial_offered_load, 1000.0, "Set up for intial offered load");
 
 DEFINE_double(targeted_cpu_load, 99.0, "targeted cpu load");
 
-DEFINE_double(precision, 500, "final search result precision");
-
 namespace grpc {
 namespace testing {
 
-static std::unique_ptr<ScenarioResult> RunAndReport(const Scenario& scenario,
-                                                    bool* success) {
-  std::cerr << "RUNNING SCENARIO: " << scenario.name() << "\n";
+static double GetCpuLoad(Scenario * scenario, double offered_load) {
+  scenario->mutable_client_config()->mutable_load_params()->mutable_poisson()->
+    set_offered_load(offered_load);
   auto result =
-      RunScenario(scenario.client_config(), scenario.num_clients(),
-                  scenario.server_config(), scenario.num_servers(),
-                  scenario.warmup_seconds(), scenario.benchmark_seconds(),
-                  scenario.spawn_local_worker_count());
-
-  // Amend the result with scenario config. Eventually we should adjust
-  // RunScenario contract so we don't need to touch the result here.
-  result->mutable_scenario()->CopyFrom(scenario);
+      RunScenario(scenario->client_config(), scenario->num_clients(),
+                  scenario->server_config(), scenario->num_servers(),
+                  scenario->warmup_seconds(), scenario->benchmark_seconds(),
+                  scenario->spawn_local_worker_count());
 
   GetReporter()->ReportQPS(*result);
   GetReporter()->ReportQPSPerCore(*result);
@@ -80,33 +71,26 @@ static std::unique_ptr<ScenarioResult> RunAndReport(const Scenario& scenario,
   GetReporter()->ReportTimes(*result);
   GetReporter()->ReportCpuUsage(*result);
 
-  for (int i = 0; *success && i < result->client_success_size(); i++) {
-    *success = result->client_success(i);
-  }
-  for (int i = 0; *success && i < result->server_success_size(); i++) {
-    *success = result->server_success(i);
+  bool success = true;
+  for (int i = 0; success && i < result->client_success_size(); i++) {
+    success = result->client_success(i);
   }
 
-  return result;
-}
+  for (int i = 0; success && i < result->server_success_size(); i++) {
+    success = result->server_success(i);
+  }
 
-static double GetCpuLoad(Scenario * scenario, double offered_load, bool* success) {
-  scenario->mutable_client_config()->mutable_load_params()->mutable_poisson()->
-    set_offered_load(offered_load);
-  auto result = RunAndReport(*scenario, success);
-  return result->summary().server_cpu_usage();
+  return success ? result->summary().server_cpu_usage() : -1;
 }
 
 static double BinarySearch(Scenario * scenario, double targeted_cpu_load,
-                        double low, double high, bool* success) {
-  while (low <= high - FLAGS_precision) {
-    double mid = low + (high - low) /2;
-    double current_cpu_load = GetCpuLoad(scenario, mid, success);
-    gpr_log(GPR_INFO, "binary search: current_offered_load %.0f", mid);
-    if (!*success) {
-      gpr_log(GPR_ERROR, "Client/Server Failure");
-      break;
-    }
+                        double low_offered_load, double high_offered_load) {
+  int low = int(low_offered_load);
+  int high = int(high_offered_load);
+  while (low <= high - 500) {
+    int mid = low + (high - low) /2;
+    double current_cpu_load = GetCpuLoad(scenario, double(mid));
+    gpr_log(GPR_INFO, "binary search: current_offered_load %d", mid);
     if (targeted_cpu_load < current_cpu_load) {
       high = mid -1;
     }
@@ -118,33 +102,34 @@ static double BinarySearch(Scenario * scenario, double targeted_cpu_load,
     }
   }
 
-  return low;
+  return double(low);
 }
 
 static double SearchOfferedLoad(double initial_offered_load, double targeted_cpu_load,
-                                Scenario * scenario, bool* success) {
+                                Scenario * scenario) {
     std::cerr << "RUNNING SCENARIO: " << scenario->name() << "\n";
     double current_offered_load = initial_offered_load;
-    double current_cpu_load = GetCpuLoad(scenario, current_offered_load, success);
+    double current_cpu_load = GetCpuLoad(scenario, current_offered_load);
     if (current_cpu_load > targeted_cpu_load) {
       gpr_log(GPR_ERROR, "Initial offered load too high");
       return -1;
     }
 
-    while (*success && (current_cpu_load < targeted_cpu_load)) {
+    do {
       current_offered_load *= 2;
-      current_cpu_load = GetCpuLoad(scenario, current_offered_load, success);
+      current_cpu_load = GetCpuLoad(scenario, current_offered_load);
       gpr_log(GPR_INFO, "do while: current_offered_load %f", current_offered_load);
-    }
+    } while (current_cpu_load < targeted_cpu_load);
 
     double targeted_offered_load = BinarySearch(scenario, targeted_cpu_load,
                                                 current_offered_load / 2,
-                                                current_offered_load, success);
+                                                current_offered_load);
+    gpr_log(GPR_INFO, "targeted_offered_load %f", targeted_offered_load);
 
     return targeted_offered_load;
 }
 
-static bool QpsDriver() {
+static bool CpuLoadDriver() {
   grpc::string json;
 
   bool scfile = (FLAGS_scenarios_file != "");
@@ -178,22 +163,17 @@ static bool QpsDriver() {
   // Parse into an array of scenarios
   Scenarios scenarios;
   ParseJson(json.c_str(), "grpc.testing.Scenarios", &scenarios);
-  bool success = true;
 
   // Make sure that there is at least some valid scenario here
   GPR_ASSERT(scenarios.scenarios_size() > 0);
+  bool success = true;
 
   for (int i = 0; i < scenarios.scenarios_size(); i++) {
-    if (!FLAGS_search) {
-      const Scenario &scenario = scenarios.scenarios(i);
-      RunAndReport(scenario, &success);
-    }
-    else {
-      Scenario *scenario = scenarios.mutable_scenarios(i);
-      double targeted_offered_load = SearchOfferedLoad(FLAGS_initial_offered_load, FLAGS_targeted_cpu_load, scenario, &success);
-      gpr_log(GPR_INFO, "targeted_offered_load %f", targeted_offered_load);
-    }
+    Scenario *scenario = scenarios.mutable_scenarios(i);
+    SearchOfferedLoad(FLAGS_initial_offered_load, FLAGS_targeted_cpu_load, scenario);
+    // GetCpuLoad(scenario, FLAGS_initial_offered_load);
   }
+
   return success;
 }
 
@@ -203,7 +183,7 @@ static bool QpsDriver() {
 int main(int argc, char **argv) {
   grpc::testing::InitBenchmark(&argc, &argv, true);
 
-  bool ok = grpc::testing::QpsDriver();
+  bool ok = grpc::testing::CpuLoadDriver();
 
   return ok ? 0 : 1;
 }

@@ -1,4 +1,5 @@
-// Copyright 2015, Google Inc.
+//
+// Copyright 2016, Google Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -26,51 +27,13 @@
 // THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
 
-syntax = "proto3";
+#ifndef GRPC_TEST_CORE_END2END_FAKE_RESOLVER_H
+#define GRPC_TEST_CORE_END2END_FAKE_RESOLVER_H
 
-package grpc.testing;
+#include "test/core/util/test_config.h"
 
-message ServerStats {
-  // wall clock time change in seconds since last reset
-  double time_elapsed = 1;
+void grpc_fake_resolver_init();
 
-  // change in user time (in seconds) used by the server since last reset
-  double time_user = 2;
-
-  // change in server time (in seconds) used by the server process and all
-  // threads since last reset
-  double time_system = 3;
-
-  // change in total cpu time of the server (data from proc/stat)
-  uint64 total_cpu_time = 4;
-
-  // change in idle time of the server (data from proc/stat)
-  uint64 idle_cpu_time = 5;
-}
-
-// Histogram params based on grpc/support/histogram.c
-message HistogramParams {
-  double resolution = 1;   // first bucket is [0, 1 + resolution)
-  double max_possible = 2; // use enough buckets to allow this value
-}
-
-// Histogram data based on grpc/support/histogram.c
-message HistogramData {
-  repeated uint32 bucket = 1;
-  double min_seen = 2;
-  double max_seen = 3;
-  double sum = 4;
-  double sum_of_squares = 5;
-  double count = 6;
-}
-
-message ClientStats {
-  // Latency histogram. Data points are in nanoseconds.
-  HistogramData latencies = 1;
-
-  // See ServerStats for details.
-  double time_elapsed = 2;
-  double time_user = 3;
-  double time_system = 4;
-}
+#endif /* GRPC_TEST_CORE_END2END_FAKE_RESOLVER_H */
