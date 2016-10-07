@@ -49,6 +49,17 @@ DEFINE_string(scenarios_file, "",
 DEFINE_string(scenarios_json, "",
               "JSON string containing an array of Scenario objects");
 DEFINE_bool(quit, false, "Quit the workers");
+DEFINE_string(search_param, "",
+              "The parameter, whose value is to be searched for to achieve "
+              "targeted cpu load");
+DEFINE_double(
+    initial_search_value, 0.0,
+    "initial parameter value to start the search with (i.e. lower bound)");
+DEFINE_double(targeted_cpu_load, 70.0,
+              "Targeted cpu load (unit: %, range [0,100])");
+DEFINE_double(precision, 1,
+              "Threshold for the search range, below which will end the "
+              "search. Also defines each stride of the search.");
 
 DEFINE_bool(search, false, "Search for offered load setting that achieves targeted cpu load");
 
@@ -90,58 +101,63 @@ static std::unique_ptr<ScenarioResult> RunAndReport(const Scenario& scenario,
   return result;
 }
 
-static double GetCpuLoad(Scenario * scenario, double offered_load, bool* success) {
-  scenario->mutable_client_config()->mutable_load_params()->mutable_poisson()->
-    set_offered_load(offered_load);
+static double GetCpuLoad(Scenario* scenario, double offered_load,
+                         bool* success) {
+  scenario->mutable_client_config()
+      ->mutable_load_params()
+      ->mutable_poisson()
+      ->set_offered_load(offered_load);
+
   auto result = RunAndReport(*scenario, success);
   return result->summary().server_cpu_usage();
 }
 
-static double BinarySearch(Scenario * scenario, double targeted_cpu_load,
-                        double low, double high, bool* success) {
+
+static double BinarySearch(Scenario* scenario, double targeted_cpu_load,
+                           double low, double high, bool* success) {
   while (low <= high - FLAGS_precision) {
-    double mid = low + (high - low) /2;
+    double mid = low + (high - low) / 2;
     double current_cpu_load = GetCpuLoad(scenario, mid, success);
-    gpr_log(GPR_INFO, "binary search: current_offered_load %.0f", mid);
+    gpr_log(GPR_DEBUG, "Binary Search: current_offered_load %.0f", mid);
     if (!*success) {
       gpr_log(GPR_ERROR, "Client/Server Failure");
       break;
     }
     if (targeted_cpu_load < current_cpu_load) {
-      high = mid -1;
-    }
-    else if (targeted_cpu_load > current_cpu_load) {
-      low = mid + 1;
-    }
-    else {
-      high = mid - 1;
+      high = mid - FLAGS_precision;
+    } else if (targeted_cpu_load > current_cpu_load) {
+      low = mid + FLAGS_precision;
+    } else {
+      high = mid - FLAGS_precision;
     }
   }
 
   return low;
 }
 
-static double SearchOfferedLoad(double initial_offered_load, double targeted_cpu_load,
-                                Scenario * scenario, bool* success) {
-    std::cerr << "RUNNING SCENARIO: " << scenario->name() << "\n";
-    double current_offered_load = initial_offered_load;
-    double current_cpu_load = GetCpuLoad(scenario, current_offered_load, success);
-    if (current_cpu_load > targeted_cpu_load) {
-      gpr_log(GPR_ERROR, "Initial offered load too high");
-      return -1;
-    }
+static double SearchOfferedLoad(double initial_offered_load,
+                                double targeted_cpu_load, Scenario* scenario,
+                                bool* success) {
+  std::cerr << "RUNNING SCENARIO: " << scenario->name() << "\n";
+  double current_offered_load = initial_offered_load;
+  double current_cpu_load = GetCpuLoad(scenario, current_offered_load, success);
+  if (current_cpu_load > targeted_cpu_load) {
+    gpr_log(GPR_ERROR, "Initial offered load too high");
+    return -1;
+  }
 
-    while (*success && (current_cpu_load < targeted_cpu_load)) {
-      current_offered_load *= 2;
-      current_cpu_load = GetCpuLoad(scenario, current_offered_load, success);
-      gpr_log(GPR_INFO, "do while: current_offered_load %f", current_offered_load);
-    }
+  while (*success && (current_cpu_load < targeted_cpu_load)) {
+    current_offered_load *= 2;
+    current_cpu_load = GetCpuLoad(scenario, current_offered_load, success);
+    gpr_log(GPR_DEBUG, "Binary Search: current_offered_load  %.0f",
+            current_offered_load);
+  }
 
-    double targeted_offered_load = BinarySearch(scenario, targeted_cpu_load,
-                                                current_offered_load / 2,
-                                                current_offered_load, success);
+  double targeted_offered_load =
+      BinarySearch(scenario, targeted_cpu_load, current_offered_load / 2,
+                   current_offered_load, success);
 
-    return targeted_offered_load;
+  return targeted_offered_load;
 }
 
 static bool QpsDriver() {
@@ -159,11 +175,11 @@ static bool QpsDriver() {
 
   if (scfile) {
     // Read the json data from disk
-    FILE *json_file = fopen(FLAGS_scenarios_file.c_str(), "r");
+    FILE* json_file = fopen(FLAGS_scenarios_file.c_str(), "r");
     GPR_ASSERT(json_file != NULL);
     fseek(json_file, 0, SEEK_END);
     long len = ftell(json_file);
-    char *data = new char[len];
+    char* data = new char[len];
     fseek(json_file, 0, SEEK_SET);
     GPR_ASSERT(len == (long)fread(data, 1, len, json_file));
     fclose(json_file);
@@ -184,14 +200,19 @@ static bool QpsDriver() {
   GPR_ASSERT(scenarios.scenarios_size() > 0);
 
   for (int i = 0; i < scenarios.scenarios_size(); i++) {
-    if (!FLAGS_search) {
-      const Scenario &scenario = scenarios.scenarios(i);
+    if (FLAGS_search_param == "") {
+      const Scenario& scenario = scenarios.scenarios(i);
       RunAndReport(scenario, &success);
-    }
-    else {
-      Scenario *scenario = scenarios.mutable_scenarios(i);
-      double targeted_offered_load = SearchOfferedLoad(FLAGS_initial_offered_load, FLAGS_targeted_cpu_load, scenario, &success);
-      gpr_log(GPR_INFO, "targeted_offered_load %f", targeted_offered_load);
+    } else {
+      if (FLAGS_search_param == "offered_load") {
+        Scenario* scenario = scenarios.mutable_scenarios(i);
+        double targeted_offered_load =
+            SearchOfferedLoad(FLAGS_initial_search_value,
+                              FLAGS_targeted_cpu_load, scenario, &success);
+        gpr_log(GPR_INFO, "targeted_offered_load %f", targeted_offered_load);
+      } else {
+        gpr_log(GPR_ERROR, "Unimplemented search param");
+      }
     }
   }
   return success;
@@ -200,7 +221,7 @@ static bool QpsDriver() {
 }  // namespace testing
 }  // namespace grpc
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
   grpc::testing::InitBenchmark(&argc, &argv, true);
 
   bool ok = grpc::testing::QpsDriver();
