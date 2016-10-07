@@ -52,16 +52,6 @@ DEFINE_bool(quit, false, "Quit the workers");
 DEFINE_string(search_param, "",
               "The parameter, whose value is to be searched for to achieve "
               "targeted cpu load");
-DEFINE_double(
-    initial_search_value, 0.0,
-    "initial parameter value to start the search with (i.e. lower bound)");
-DEFINE_double(targeted_cpu_load, 70.0,
-              "Targeted cpu load (unit: %, range [0,100])");
-DEFINE_double(precision, 1,
-              "Threshold for the search range, below which will end the "
-              "search. Also defines each stride of the search.");
-
-DEFINE_bool(search, false, "Search for offered load setting that achieves targeted cpu load");
 
 DEFINE_double(initial_offered_load, 1000.0, "Set up for intial offered load");
 
