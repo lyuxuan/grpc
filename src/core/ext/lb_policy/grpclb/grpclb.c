@@ -329,8 +329,8 @@ static bool is_server_valid(const grpc_grpclb_server *server, size_t idx,
   if (server->port >> 16 != 0) {
     if (log) {
       gpr_log(GPR_ERROR,
-              "Invalid port '%d' at index %zu of serverlist. Ignoring.",
-              server->port, idx);
+              "Invalid port '%d' at index %lu of serverlist. Ignoring.",
+              server->port, (unsigned long)idx);
     }
     return false;
   }
@@ -338,9 +338,9 @@ static bool is_server_valid(const grpc_grpclb_server *server, size_t idx,
   if (ip->size != 4 && ip->size != 16) {
     if (log) {
       gpr_log(GPR_ERROR,
-              "Expected IP to be 4 or 16 bytes, got %d at index %zu of "
+              "Expected IP to be 4 or 16 bytes, got %d at index %lu of "
               "serverlist. Ignoring",
-              ip->size, idx);
+              ip->size, (unsigned long)idx);
     }
     return false;
   }
@@ -761,7 +761,7 @@ static int glb_pick(grpc_exec_ctx *exec_ctx, grpc_lb_policy *pol,
         GRPC_ERROR_CREATE("No mdelem storage for the LB token. Load reporting "
                           "won't work without it. Failing"),
         NULL);
-    return 1;
+    return 0;
   }
 
   glb_lb_policy *glb_policy = (glb_lb_policy *)pol;
@@ -1070,8 +1070,8 @@ static void res_recv_cb(grpc_exec_ctx *exec_ctx, void *arg, grpc_error *error) {
     if (serverlist != NULL) {
       gpr_slice_unref(response_slice);
       if (grpc_lb_glb_trace) {
-        gpr_log(GPR_INFO, "Serverlist with %zu servers received",
-                serverlist->num_servers);
+        gpr_log(GPR_INFO, "Serverlist with %lu servers received",
+                (unsigned long)serverlist->num_servers);
       }
 
       /* update serverlist */
@@ -1155,10 +1155,10 @@ static void srv_status_rcvd_cb(grpc_exec_ctx *exec_ctx, void *arg,
   if (grpc_lb_glb_trace) {
     gpr_log(GPR_INFO,
             "status from lb server received. Status = %d, Details = '%s', "
-            "Capaticy "
-            "= %zu",
+            "Capacity "
+            "= %lu",
             lb_client->status, lb_client->status_details,
-            lb_client->status_details_capacity);
+            (unsigned long)lb_client->status_details_capacity);
   }
   /* TODO(dgq): deal with stream termination properly (fire up another one?
    * fail the original call?) */
