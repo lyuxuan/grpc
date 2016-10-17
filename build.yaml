@@ -1584,6 +1584,17 @@ targets:
   - grpc
   - gpr_test_util
   - gpr
+- name: fling_mem_server
+  build: test
+  run: false
+  language: c
+  src:
+  - test/core/memory_usage/server.c
+  deps:
+  - grpc_test_util
+  - grpc
+  - gpr_test_util
+  - gpr
 - name: fling_server
   build: test
   run: false
