@@ -1562,34 +1562,56 @@ targets:
   - mac
   - linux
   - posix
+- name: fling_call_mem_client
+  build: test
+  run: false
+  language: c
+  src:
+  - test/core/call_mem_usage/client.c
+  deps:
+  - grpc_test_util
+  - grpc
+  - gpr_test_util
+  - gpr
+- name: fling_call_mem_server
+  build: test
+  run: false
+  language: c
+  src:
+  - test/core/call_mem_usage/server.c
+  deps:
+  - grpc_test_util
+  - grpc
+  - gpr_test_util
+  - gpr
+- name: fling_channel_mem_client
+  build: test
+  run: false
+  language: c
+  src:
+  - test/core/channel_mem_usage/client.c
+  deps:
+  - grpc_test_util
+  - grpc
+  - gpr_test_util
+  - gpr
+- name: fling_channel_mem_server
+  build: test
+  run: false
+  language: c
+  src:
+  - test/core/channel_mem_usage/server.c
+  deps:
+  - grpc_test_util
+  - grpc
+  - gpr_test_util
+  - gpr
 - name: fling_client
   build: test
   run: false
   language: c
   src:
   - test/core/fling/client.c
-  deps:
-  - grpc_test_util
-  - grpc
-  - gpr_test_util
-  - gpr
-- name: fling_mem_client
-  build: test
-  run: false
-  language: c
-  src:
-  - test/core/memory_usage/client.c
-  deps:
-  - grpc_test_util
-  - grpc
-  - gpr_test_util
-  - gpr
-- name: fling_mem_server
-  build: test
-  run: false
-  language: c
-  src:
-  - test/core/memory_usage/server.c
   deps:
   - grpc_test_util
   - grpc
