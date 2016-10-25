@@ -58,13 +58,24 @@ static grpc_server *server;
 static grpc_metadata_array request_metadata_recv;
 static grpc_metadata_array initial_metadata_send;
 static grpc_op metadata_send_op;
+static grpc_call *call;
+static grpc_byte_buffer *payload_buffer = NULL;
+/* Used to drain the terminal read in unary calls. */
+static grpc_byte_buffer *terminal_buffer = NULL;
+static grpc_call_details call_details;
+static grpc_op unary_ops[6];
+static int was_cancelled = 2;
+static grpc_op read_op;
+
 static int got_sigint = 0;
 
 static void *tag(intptr_t t) { return (void *)t; }
 
 typedef enum {
   FLING_SERVER_NEW_REQUEST = 1,
-  FLING_SERVER_SEND_INIT_METADATA_FOR_UNARY
+  FLING_SERVER_SEND_INIT_METADATA_FOR_UNARY,
+  FLING_SERVER_READ_FOR_UNARY,
+  FLING_SERVER_BATCH_OPS_FOR_UNARY
 } fling_server_tags;
 
 typedef struct {
@@ -95,6 +106,47 @@ static void send_initial_metadata_unary(void* tag) {
   GPR_ASSERT(GRPC_CALL_OK == error);
 }
 
+static void handle_unary_method(void) {
+  grpc_op *op;
+  grpc_call_error error;
+
+  grpc_metadata_array_init(&initial_metadata_send);
+
+  op = unary_ops;
+  op->op = GRPC_OP_SEND_INITIAL_METADATA;
+  op->data.send_initial_metadata.count = 0;
+  op++;
+  op->op = GRPC_OP_RECV_MESSAGE;
+  op->data.recv_message = &terminal_buffer;
+  op++;
+  op->op = GRPC_OP_SEND_MESSAGE;
+  if (payload_buffer == NULL) {
+    gpr_log(GPR_INFO, "NULL payload buffer !!!");
+  }
+  op->data.send_message = payload_buffer;
+  op++;
+  op->op = GRPC_OP_SEND_STATUS_FROM_SERVER;
+  op->data.send_status_from_server.status = GRPC_STATUS_OK;
+  op->data.send_status_from_server.trailing_metadata_count = 0;
+  op->data.send_status_from_server.status_details = "";
+  op++;
+  op->op = GRPC_OP_RECV_CLOSE_ON_SERVER;
+  op->data.recv_close_on_server.cancelled = &was_cancelled;
+  op++;
+
+  error = grpc_call_start_batch(call, unary_ops, (size_t)(op - unary_ops),
+                                tag(FLING_SERVER_BATCH_OPS_FOR_UNARY), NULL);
+  GPR_ASSERT(GRPC_CALL_OK == error);
+}
+
+static void start_read_op(int t) {
+  grpc_call_error error;
+  /* Starting read at server */
+  read_op.op = GRPC_OP_RECV_MESSAGE;
+  read_op.data.recv_message = &payload_buffer;
+  error = grpc_call_start_batch(call, &read_op, 1, tag(t), NULL);
+  GPR_ASSERT(GRPC_CALL_OK == error);
+}
 /* We have some sort of deadlock, so let's not exit gracefully for now.
    When that is resolved, please remove the #include <unistd.h> above. */
 static void sigint_handler(int x) { _exit(0); }
@@ -111,7 +163,7 @@ int main(int argc, char **argv) {
 
   char *fake_argv[1];
 
-  gpr_timers_set_log_filename("latency_trace.fling_server.txt");
+  // gpr_timers_set_log_filename("latency_trace.fling_server.txt");
 
   GPR_ASSERT(argc >= 1);
   fake_argv[0] = argv[0];
@@ -159,7 +211,7 @@ int main(int argc, char **argv) {
   int next_call_idx = 0;
   request_call_unary(next_call_idx);
 
-  grpc_profiler_start("server.prof");
+  // grpc_profiler_start("server.prof");
   signal(SIGINT, sigint_handler);
   while (!shutdown_finished) {
     if (got_sigint && !shutdown_started) {
@@ -181,13 +233,30 @@ int main(int argc, char **argv) {
       case GRPC_OP_COMPLETE:
         switch (s->state) {
           case FLING_SERVER_NEW_REQUEST:
-            request_call_unary(++next_call_idx);
-            s->state = FLING_SERVER_SEND_INIT_METADATA_FOR_UNARY;
-            send_initial_metadata_unary(s);
+            if (0 ==  strcmp(call_details.method, "Cleanup")) {
+              start_read_op(FLING_SERVER_READ_FOR_UNARY);
+            }
+            else {
+              request_call_unary(++next_call_idx);
+              s->state = FLING_SERVER_SEND_INIT_METADATA_FOR_UNARY;
+              send_initial_metadata_unary(s);
+            }
             break;
           case FLING_SERVER_SEND_INIT_METADATA_FOR_UNARY:
             grpc_call_destroy(s->call);
             grpc_call_details_destroy(&s->call_details);
+            break;
+          case FLING_SERVER_READ_FOR_UNARY:
+            /* Finished payload read for unary. Start all reamaining
+             *  unary ops in a batch.
+             */
+            handle_unary_method();
+            break;
+          case FLING_SERVER_BATCH_OPS_FOR_UNARY:
+            /* Finished unary call. */
+            grpc_byte_buffer_destroy(payload_buffer);
+            payload_buffer = NULL;
+            grpc_call_destroy(call);
             break;
         }
         break;
@@ -199,7 +268,7 @@ int main(int argc, char **argv) {
         break;
     }
   }
-  grpc_profiler_stop();
+  // grpc_profiler_stop();
 
   grpc_server_destroy(server);
   grpc_completion_queue_destroy(cq);
