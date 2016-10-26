@@ -45,18 +45,17 @@
 
 static grpc_channel *channel;
 static grpc_completion_queue *cq;
-static grpc_call *calls[2000];
-static grpc_call *call;
-static grpc_op metadata_ops[2];
-static grpc_op ops[6];
+static grpc_call *calls[4000];
+static grpc_op metadata_ops[4];
+// static grpc_op ops[6];
 static grpc_metadata_array initial_metadata_recv;
-static grpc_metadata_array trailing_metadata_recv;
 static grpc_op *op;
-static grpc_byte_buffer *the_buffer;
-static grpc_byte_buffer *response_payload_recv = NULL;
-static grpc_status_code status;
-static char *details = NULL;
-static size_t details_capacity = 0;
+// static grpc_metadata_array trailing_metadata_recv;
+// static grpc_byte_buffer *the_buffer;
+// static grpc_byte_buffer *response_payload_recv = NULL;
+// static grpc_status_code status;
+// static char *details = NULL;
+// static size_t details_capacity = 0;
 
 static void init_ping_pong_request(int call_idx) {
   grpc_metadata_array_init(&initial_metadata_recv);
@@ -70,7 +69,14 @@ static void init_ping_pong_request(int call_idx) {
   op->op = GRPC_OP_RECV_INITIAL_METADATA;
   op->data.recv_initial_metadata = &initial_metadata_recv;
   op++;
-
+  // op->op = GRPC_OP_SEND_CLOSE_FROM_CLIENT;
+  // op++;
+  // op->op = GRPC_OP_RECV_STATUS_ON_CLIENT;
+  // op->data.recv_status_on_client.trailing_metadata = &trailing_metadata_recv;
+  // op->data.recv_status_on_client.status = &status;
+  // op->data.recv_status_on_client.status_details = &details;
+  // op->data.recv_status_on_client.status_details_capacity = &details_capacity;
+  // op++;
   calls[call_idx] = grpc_channel_create_call(
       channel, NULL, GRPC_PROPAGATE_DEFAULTS, cq, "/Reflector/reflectUnary",
       "localhost", gpr_inf_future(GPR_CLOCK_REALTIME), NULL);
@@ -78,6 +84,47 @@ static void init_ping_pong_request(int call_idx) {
                                                    metadata_ops, 2, (void *)1,
                                                    NULL));
   grpc_completion_queue_next(cq, gpr_inf_future(GPR_CLOCK_REALTIME), NULL);
+  // grpc_call_destroy(calls[call_idx]);
+  // calls[call_idx] = NULL;
+
+  // grpc_metadata_array_init(&initial_metadata_recv);
+  // grpc_metadata_array_init(&trailing_metadata_recv);
+  //
+  // memset(ops, 0, sizeof(ops));
+  // op = ops;
+  //
+  // op->op = GRPC_OP_SEND_INITIAL_METADATA;
+  // op->data.send_initial_metadata.count = 0;
+  // op++;
+  // op->op = GRPC_OP_SEND_MESSAGE;
+  // op->data.send_message = the_buffer;
+  // op++;
+  // op->op = GRPC_OP_SEND_CLOSE_FROM_CLIENT;
+  // op++;
+  // op->op = GRPC_OP_RECV_INITIAL_METADATA;
+  // op->data.recv_initial_metadata = &initial_metadata_recv;
+  // op++;
+  // op->op = GRPC_OP_RECV_MESSAGE;
+  // op->data.recv_message = &response_payload_recv;
+  // op++;
+  // op->op = GRPC_OP_RECV_STATUS_ON_CLIENT;
+  // op->data.recv_status_on_client.trailing_metadata = &trailing_metadata_recv;
+  // op->data.recv_status_on_client.status = &status;
+  // op->data.recv_status_on_client.status_details = &details;
+  // op->data.recv_status_on_client.status_details_capacity = &details_capacity;
+  // op++;
+  //
+  // calls[call_idx] = grpc_channel_create_call(channel, NULL, GRPC_PROPAGATE_DEFAULTS, cq,
+  //                                 "Cleanup", "localhost",
+  //                                 gpr_inf_future(GPR_CLOCK_REALTIME), NULL);
+  // GPR_ASSERT(GRPC_CALL_OK == grpc_call_start_batch(calls[call_idx], ops,
+  //                                                  (size_t)(op - ops),
+  //                                                  (void *)1, NULL));
+  // grpc_completion_queue_next(cq, gpr_inf_future(GPR_CLOCK_REALTIME), NULL);
+  // grpc_call_destroy(calls[call_idx]);
+  // grpc_byte_buffer_destroy(response_payload_recv);
+  // calls[call_idx] = NULL;
+
 }
 
 static void step_ping_pong_request(int call_idx) {
@@ -85,45 +132,45 @@ static void step_ping_pong_request(int call_idx) {
   calls[call_idx] = NULL;
 }
 
-static void clean_up_call(void) {
-  grpc_metadata_array_init(&initial_metadata_recv);
-  grpc_metadata_array_init(&trailing_metadata_recv);
-
-  memset(ops, 0, sizeof(ops));
-  op = ops;
-
-  op->op = GRPC_OP_SEND_INITIAL_METADATA;
-  op->data.send_initial_metadata.count = 0;
-  op++;
-  op->op = GRPC_OP_SEND_MESSAGE;
-  op->data.send_message = the_buffer;
-  op++;
-  op->op = GRPC_OP_SEND_CLOSE_FROM_CLIENT;
-  op++;
-  op->op = GRPC_OP_RECV_INITIAL_METADATA;
-  op->data.recv_initial_metadata = &initial_metadata_recv;
-  op++;
-  op->op = GRPC_OP_RECV_MESSAGE;
-  op->data.recv_message = &response_payload_recv;
-  op++;
-  op->op = GRPC_OP_RECV_STATUS_ON_CLIENT;
-  op->data.recv_status_on_client.trailing_metadata = &trailing_metadata_recv;
-  op->data.recv_status_on_client.status = &status;
-  op->data.recv_status_on_client.status_details = &details;
-  op->data.recv_status_on_client.status_details_capacity = &details_capacity;
-  op++;
-
-  call = grpc_channel_create_call(channel, NULL, GRPC_PROPAGATE_DEFAULTS, cq,
-                                  "Cleanup", "localhost",
-                                  gpr_inf_future(GPR_CLOCK_REALTIME), NULL);
-  GPR_ASSERT(GRPC_CALL_OK == grpc_call_start_batch(call, ops,
-                                                   (size_t)(op - ops),
-                                                   (void *)1, NULL));
-  grpc_completion_queue_next(cq, gpr_inf_future(GPR_CLOCK_REALTIME), NULL);
-  grpc_call_destroy(call);
-  grpc_byte_buffer_destroy(response_payload_recv);
-  call = NULL;
-}
+// static void clean_up_call(int k) {
+//   grpc_metadata_array_init(&initial_metadata_recv);
+//   grpc_metadata_array_init(&trailing_metadata_recv);
+//
+//   memset(ops, 0, sizeof(ops));
+//   op = ops;
+//
+//   op->op = GRPC_OP_SEND_INITIAL_METADATA;
+//   op->data.send_initial_metadata.count = 0;
+//   op++;
+//   op->op = GRPC_OP_SEND_MESSAGE;
+//   op->data.send_message = the_buffer;
+//   op++;
+//   op->op = GRPC_OP_SEND_CLOSE_FROM_CLIENT;
+//   op++;
+//   op->op = GRPC_OP_RECV_INITIAL_METADATA;
+//   op->data.recv_initial_metadata = &initial_metadata_recv;
+//   op++;
+//   op->op = GRPC_OP_RECV_MESSAGE;
+//   op->data.recv_message = &response_payload_recv;
+//   op++;
+//   op->op = GRPC_OP_RECV_STATUS_ON_CLIENT;
+//   op->data.recv_status_on_client.trailing_metadata = &trailing_metadata_recv;
+//   op->data.recv_status_on_client.status = &status;
+//   op->data.recv_status_on_client.status_details = &details;
+//   op->data.recv_status_on_client.status_details_capacity = &details_capacity;
+//   op++;
+//
+//   calls[k] = grpc_channel_create_call(channel, NULL, GRPC_PROPAGATE_DEFAULTS, cq,
+//                                   "Cleanup", "localhost",
+//                                   gpr_inf_future(GPR_CLOCK_REALTIME), NULL);
+//   GPR_ASSERT(GRPC_CALL_OK == grpc_call_start_batch(calls[k], ops,
+//                                                    (size_t)(op - ops),
+//                                                    (void *)1, NULL));
+//   grpc_completion_queue_next(cq, gpr_inf_future(GPR_CLOCK_REALTIME), NULL);
+//   grpc_call_destroy(calls[k]);
+//   grpc_byte_buffer_destroy(response_payload_recv);
+//   calls[k] = NULL;
+// }
 
 typedef struct {
   const char *name;
@@ -143,6 +190,7 @@ int main(int argc, char **argv) {
   char *fake_argv[1];
 
   int secure = 0;
+  int payload_size;
   char *target = "localhost:443";
   gpr_cmdline *cl;
   grpc_event event;
@@ -159,6 +207,8 @@ int main(int argc, char **argv) {
   int benchmark_iterations = 1000;
 
   cl = gpr_cmdline_create("fling client");
+  gpr_cmdline_add_int(cl, "payload_size", "Size of the payload to send",
+                      &payload_size);
   gpr_cmdline_add_string(cl, "target", "Target host:port", &target);
   gpr_cmdline_add_flag(cl, "secure", "Run with security?", &secure);
   gpr_cmdline_add_string(cl, "scenario", "Scenario", &scenario_name);
@@ -181,6 +231,8 @@ int main(int argc, char **argv) {
     return 1;
   }
   cq = grpc_completion_queue_create(NULL);
+  // the_buffer = grpc_raw_byte_buffer_create(&slice, (size_t)payload_size);
+
   struct grpc_memory_counters channel_start =
   grpc_memory_counters_snapshot();
   channel = grpc_insecure_channel_create(target, NULL, NULL);
@@ -188,8 +240,6 @@ int main(int argc, char **argv) {
   gpr_log(GPR_INFO, "start profiling");
 
   int call_idx;
-  // struct grpc_memory_counters cstart = grpc_memory_counters_snapshot();
-
   // warmup period
   for (call_idx = 0; call_idx < warmup_iterations; ++call_idx) {
     sc.init(call_idx);
@@ -212,13 +262,16 @@ int main(int argc, char **argv) {
     sc.do_one_step(call_idx);
   }
 
-  clean_up_call();
+  // for (int j = 0; j<benchmark_iterations; ++j) {
+  //   clean_up_call(warmup_iterations + benchmark_iterations);
+  // }
 
   struct grpc_memory_counters channel_end = grpc_memory_counters_snapshot();
   gpr_log(
       GPR_INFO, "channel mem %zi bytes %zi.",
       channel_end.total_size_relative - channel_start.total_size_relative,
       channel_end.total_allocs_relative - channel_start.total_allocs_relative);
+  gpr_slice_unref(slice);
 
   grpc_channel_destroy(channel);
 
@@ -230,7 +283,8 @@ int main(int argc, char **argv) {
   } while (event.type != GRPC_QUEUE_SHUTDOWN);
 
   grpc_completion_queue_destroy(cq);
-  gpr_slice_unref(slice);
+  // grpc_byte_buffer_destroy(the_buffer);
+
   grpc_shutdown();
 
   gpr_log(GPR_INFO, "The end: relative %zi, %zi",
