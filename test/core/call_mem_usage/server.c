@@ -50,6 +50,7 @@
 #include <grpc/support/log.h>
 #include <grpc/support/time.h>
 #include "test/core/end2end/data/ssl_test_data.h"
+#include "test/core/util/memory_counters.h"
 #include "test/core/util/port.h"
 #include "test/core/util/test_config.h"
 
@@ -57,23 +58,19 @@ static grpc_completion_queue *cq;
 static grpc_server *server;
 static grpc_metadata_array request_metadata_recv;
 static grpc_metadata_array initial_metadata_send;
-static grpc_op metadata_send_op[3];
-static grpc_byte_buffer *payload_buffer = NULL;
-/* Used to drain the terminal read in unary calls. */
-static grpc_byte_buffer *terminal_buffer = NULL;
-static grpc_op unary_ops[6];
-static int was_cancelled = 2;
-static grpc_op read_op;
-
+static grpc_op metadata_send_op[2];
+static grpc_op receive_close_op;
+static grpc_op send_status_op;
 static int got_sigint = 0;
+static int was_cancelled = 2;
 
 static void *tag(intptr_t t) { return (void *)t; }
 
 typedef enum {
   FLING_SERVER_NEW_REQUEST = 1,
   FLING_SERVER_SEND_INIT_METADATA_FOR_UNARY,
-  FLING_SERVER_READ_FOR_UNARY,
-  FLING_SERVER_BATCH_OPS_FOR_UNARY
+  FLING_SERVER_RECEIVE_CLOSE,
+  FLING_SERVER_SEND_STATUS,
 } fling_server_tags;
 
 typedef struct {
@@ -85,70 +82,48 @@ typedef struct {
 static fling_call calls[10001];
 
 static void request_call_unary(int k) {
-  if (k == (int) (sizeof(calls)/sizeof(fling_call))) {
+  if (k == (int)(sizeof(calls) / sizeof(fling_call))) {
     gpr_log(GPR_INFO, "Used all call slots (10000) on server. Server exit.");
     _exit(0);
   }
   grpc_metadata_array_init(&request_metadata_recv);
-  grpc_server_request_call(server, &calls[k].call, &calls[k].call_details, &request_metadata_recv,
-                           cq, cq, &calls[k]);
+  grpc_server_request_call(server, &calls[k].call, &calls[k].call_details,
+                           &request_metadata_recv, cq, cq, &calls[k]);
 }
 
-static void send_initial_metadata_unary(void* tag) {
+static void send_initial_metadata_unary(void *tag) {
   grpc_call_error error;
   grpc_metadata_array_init(&initial_metadata_send);
   metadata_send_op[0].op = GRPC_OP_SEND_INITIAL_METADATA;
   metadata_send_op[0].data.send_initial_metadata.count = 0;
-  metadata_send_op[1].op = GRPC_OP_SEND_STATUS_FROM_SERVER;
-  metadata_send_op[1].data.send_status_from_server.status = GRPC_STATUS_OK;
-  metadata_send_op[1].data.send_status_from_server.trailing_metadata_count = 0;
-  metadata_send_op[1].data.send_status_from_server.status_details = "";
-  metadata_send_op[2].op = GRPC_OP_RECV_CLOSE_ON_SERVER;
-  metadata_send_op[2].data.recv_close_on_server.cancelled = &was_cancelled;
-  error = grpc_call_start_batch((* (fling_call*)tag).call, metadata_send_op, 3, tag, NULL);
 
-  GPR_ASSERT(GRPC_CALL_OK == error);
-}
-
-static void handle_unary_method(fling_call* tag) {
-  grpc_op *op;
-  grpc_call_error error;
-
-  grpc_metadata_array_init(&initial_metadata_send);
-
-  op = unary_ops;
-  op->op = GRPC_OP_SEND_INITIAL_METADATA;
-  op->data.send_initial_metadata.count = 0;
-  op++;
-  op->op = GRPC_OP_RECV_MESSAGE;
-  op->data.recv_message = &terminal_buffer;
-  op++;
-  op->op = GRPC_OP_SEND_MESSAGE;
-  if (payload_buffer == NULL) {
-    gpr_log(GPR_INFO, "NULL payload buffer !!!");
-  }
-  op->data.send_message = payload_buffer;
-  op++;
-  op->op = GRPC_OP_SEND_STATUS_FROM_SERVER;
-  op->data.send_status_from_server.status = GRPC_STATUS_OK;
-  op->data.send_status_from_server.trailing_metadata_count = 0;
-  op->data.send_status_from_server.status_details = "";
-  op++;
-  op->op = GRPC_OP_RECV_CLOSE_ON_SERVER;
-  op->data.recv_close_on_server.cancelled = &was_cancelled;
-  op++;
-
-  error = grpc_call_start_batch((* (fling_call*)tag).call, unary_ops, (size_t)(op - unary_ops),
+  error = grpc_call_start_batch((*(fling_call *)tag).call, metadata_send_op, 1,
                                 tag, NULL);
+
   GPR_ASSERT(GRPC_CALL_OK == error);
 }
 
-static void start_read_op(fling_call * tag) {
+static void receive_close(void *tag) {
   grpc_call_error error;
-  /* Starting read at server */
-  read_op.op = GRPC_OP_RECV_MESSAGE;
-  read_op.data.recv_message = &payload_buffer;
-  error = grpc_call_start_batch((* (fling_call*)tag).call, &read_op, 1, tag, NULL);
+  receive_close_op.op = GRPC_OP_RECV_CLOSE_ON_SERVER;
+  receive_close_op.data.recv_close_on_server.cancelled = &was_cancelled;
+
+  error = grpc_call_start_batch((*(fling_call *)tag).call, &receive_close_op, 1,
+                                tag, NULL);
+
+  GPR_ASSERT(GRPC_CALL_OK == error);
+}
+
+static void send_status(void *tag) {
+  grpc_call_error error;
+  send_status_op.op = GRPC_OP_SEND_STATUS_FROM_SERVER;
+  send_status_op.data.send_status_from_server.status = GRPC_STATUS_OK;
+  send_status_op.data.send_status_from_server.trailing_metadata_count = 0;
+  send_status_op.data.send_status_from_server.status_details = "";
+
+  error = grpc_call_start_batch((*(fling_call *)tag).call, &send_status_op, 1,
+                                tag, NULL);
+
   GPR_ASSERT(GRPC_CALL_OK == error);
 }
 /* We have some sort of deadlock, so let's not exit gracefully for now.
@@ -166,8 +141,6 @@ int main(int argc, char **argv) {
   char *addr = NULL;
 
   char *fake_argv[1];
-
-  // gpr_timers_set_log_filename("latency_trace.fling_server.txt");
 
   GPR_ASSERT(argc >= 1);
   fake_argv[0] = argv[0];
@@ -189,6 +162,9 @@ int main(int argc, char **argv) {
   gpr_log(GPR_INFO, "creating server on: %s", addr);
 
   cq = grpc_completion_queue_create(NULL);
+
+  struct grpc_memory_counters before_server_create =
+      grpc_memory_counters_snapshot();
   if (secure) {
     grpc_ssl_pem_key_cert_pair pem_key_cert_pair = {test_server1_key,
                                                     test_server1_cert};
@@ -201,13 +177,20 @@ int main(int argc, char **argv) {
     server = grpc_server_create(NULL, NULL);
     GPR_ASSERT(grpc_server_add_insecure_http2_port(server, addr));
   }
+  struct grpc_memory_counters after_server_create =
+      grpc_memory_counters_snapshot();
+
+  gpr_log(GPR_INFO, "grpc server create %zi bytes",
+          after_server_create.total_size_relative -
+              before_server_create.total_size_relative);
   grpc_server_register_completion_queue(server, cq, NULL);
   grpc_server_start(server);
 
   gpr_free(addr_buf);
   addr = addr_buf = NULL;
 
-  for (int i = 0; i < (int) (sizeof(calls)/sizeof(fling_call)); i++) {
+  // initiallize fling_call instances
+  for (int i = 0; i < (int)(sizeof(calls) / sizeof(fling_call)); i++) {
     grpc_call_details_init(&calls[i].call_details);
     calls[i].state = FLING_SERVER_NEW_REQUEST;
   }
@@ -215,7 +198,6 @@ int main(int argc, char **argv) {
   int next_call_idx = 0;
   request_call_unary(next_call_idx);
 
-  // grpc_profiler_start("server.prof");
   signal(SIGINT, sigint_handler);
   while (!shutdown_finished) {
     if (got_sigint && !shutdown_started) {
@@ -229,42 +211,29 @@ int main(int argc, char **argv) {
     }
     ev = grpc_completion_queue_next(
         cq, gpr_time_add(gpr_now(GPR_CLOCK_REALTIME),
-                         gpr_time_from_micros(1000000, GPR_TIMESPAN)), NULL);
-    printf("%d\n", next_call_idx);
+                         gpr_time_from_micros(1000000, GPR_TIMESPAN)),
+        NULL);
     fling_call *s = ev.tag;
 
     switch (ev.type) {
       case GRPC_OP_COMPLETE:
         switch (s->state) {
           case FLING_SERVER_NEW_REQUEST:
-            if (0 ==  strcmp(s->call_details.method, "Cleanup")) {
-              s->state = FLING_SERVER_READ_FOR_UNARY;
-              start_read_op(s);
-            }
-            else {
-              request_call_unary(++next_call_idx);
-              s->state = FLING_SERVER_SEND_INIT_METADATA_FOR_UNARY;
-              send_initial_metadata_unary(s);
-            }
+            request_call_unary(++next_call_idx);
+            s->state = FLING_SERVER_SEND_INIT_METADATA_FOR_UNARY;
+            send_initial_metadata_unary(s);
             break;
           case FLING_SERVER_SEND_INIT_METADATA_FOR_UNARY:
+            s->state = FLING_SERVER_RECEIVE_CLOSE;
+            receive_close(s);
+            break;
+          case FLING_SERVER_RECEIVE_CLOSE:
+            s->state = FLING_SERVER_SEND_STATUS;
+            send_status(s);
+            break;
+          case FLING_SERVER_SEND_STATUS:
             grpc_call_destroy(s->call);
             grpc_call_details_destroy(&s->call_details);
-            break;
-          case FLING_SERVER_READ_FOR_UNARY:
-            /* Finished payload read for unary. Start all reamaining
-             *  unary ops in a batch.
-             */
-             s->state = FLING_SERVER_BATCH_OPS_FOR_UNARY;
-            handle_unary_method(s);
-            break;
-          case FLING_SERVER_BATCH_OPS_FOR_UNARY:
-            /* Finished unary call. */
-            grpc_byte_buffer_destroy(payload_buffer);
-            payload_buffer = NULL;
-            grpc_call_destroy(s->call);
-            grpc_call_details_destroy(&s->call_details);
-            request_call_unary(++next_call_idx);
             break;
         }
         break;
@@ -276,7 +245,6 @@ int main(int argc, char **argv) {
         break;
     }
   }
-  // grpc_profiler_stop();
 
   grpc_server_destroy(server);
   grpc_completion_queue_destroy(cq);
