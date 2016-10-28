@@ -195,6 +195,7 @@ int main(int argc, char **argv) {
   for (int i = 0; i < (int)(sizeof(calls) / sizeof(fling_call)); i++) {
     grpc_call_details_init(&calls[i].call_details);
     calls[i].state = FLING_SERVER_NEW_REQUEST;
+    calls[i].terminal_buffer = NULL;
   }
 
   int next_call_idx = 0;
@@ -222,7 +223,7 @@ int main(int argc, char **argv) {
         switch (s->state) {
           case FLING_SERVER_NEW_REQUEST:
             request_call_unary(++next_call_idx);
-            s->state = FLING_SERVER_SEND_INIT_METADATA_FOR_UNARY;
+            s->state = FLING_SERVER_RECEIVE_CLOSE;
             send_initial_metadata_unary(s);
             break;
           case FLING_SERVER_SEND_INIT_METADATA_FOR_UNARY:
