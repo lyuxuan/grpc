@@ -192,12 +192,16 @@ int main(int argc, char **argv) {
                    calls_start.total_size_relative) /
               benchmark_iterations);
 
-  // destroy calls
+  //send snapshot request
+
+
+  // send wait signal
   for (call_idx = 0; call_idx < warmup_iterations + benchmark_iterations;
        ++call_idx) {
     sc.do_one_step(call_idx);
   }
 
+  // destroy calls
   for (call_idx = 0; call_idx < warmup_iterations + benchmark_iterations;
        ++call_idx) {
     sc.finish_one_step(call_idx);

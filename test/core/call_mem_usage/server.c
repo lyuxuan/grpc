@@ -62,7 +62,7 @@ static grpc_op metadata_send_op[2];
 static grpc_op receive_close_op;
 static grpc_op send_status_op;
 static int got_sigint = 0;
-static int was_cancelled = 2;
+// static grpc_byte_buffer *terminal_buffer = NULL;
 
 static void *tag(intptr_t t) { return (void *)t; }
 
@@ -77,6 +77,7 @@ typedef struct {
   fling_server_tags state;
   grpc_call *call;
   grpc_call_details call_details;
+  grpc_byte_buffer *terminal_buffer;
 } fling_call;
 
 static fling_call calls[10001];
@@ -105,8 +106,9 @@ static void send_initial_metadata_unary(void *tag) {
 
 static void receive_close(void *tag) {
   grpc_call_error error;
-  receive_close_op.op = GRPC_OP_RECV_CLOSE_ON_SERVER;
-  receive_close_op.data.recv_close_on_server.cancelled = &was_cancelled;
+
+  receive_close_op.op = GRPC_OP_RECV_MESSAGE;
+  receive_close_op.data.recv_message = &(*(fling_call *)tag).terminal_buffer;
 
   error = grpc_call_start_batch((*(fling_call *)tag).call, &receive_close_op, 1,
                                 tag, NULL);
