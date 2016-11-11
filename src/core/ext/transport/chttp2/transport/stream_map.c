@@ -50,6 +50,7 @@ void grpc_chttp2_stream_map_init(grpc_chttp2_stream_map *map,
 }
 
 void grpc_chttp2_stream_map_destroy(grpc_chttp2_stream_map *map) {
+  gpr_log(GPR_INFO, "%zi %zi", sizeof(uint32_t) * map->capacity, sizeof(void *)*map->capacity);
   gpr_free(map->keys);
   gpr_free(map->values);
 }

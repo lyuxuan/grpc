@@ -165,9 +165,7 @@ static void postprocess_scenario_result(ScenarioResult* result) {
   result->mutable_summary()->set_server_user_time(server_user_time);
   result->mutable_summary()->set_client_system_time(client_system_time);
   result->mutable_summary()->set_client_user_time(client_user_time);
-<<<<<<< HEAD
   result->mutable_summary()->set_server_cpu_usage(server_cpu_usage);
-=======
 
   if (result->request_results_size() > 0) {
     int64_t successes = 0;
@@ -185,7 +183,6 @@ static void postprocess_scenario_result(ScenarioResult* result) {
     result->mutable_summary()->set_failed_requests_per_second(failures /
                                                               time_estimate);
   }
->>>>>>> master
 }
 
 // Namespace for classes and functions used only in RunScenario

@@ -215,6 +215,7 @@ static void tcp_do_read(grpc_exec_ctx *exec_ctx, grpc_tcp *tcp) {
   GPR_ASSERT(tcp->incoming_buffer->count <= MAX_READ_IOVEC);
   GPR_TIMER_BEGIN("tcp_continue_read", 0);
 
+  gpr_log(GPR_INFO, "count %zi", tcp->incoming_buffer->count);
   for (i = 0; i < tcp->incoming_buffer->count; i++) {
     iov[i].iov_base = GPR_SLICE_START_PTR(tcp->incoming_buffer->slices[i]);
     iov[i].iov_len = GPR_SLICE_LENGTH(tcp->incoming_buffer->slices[i]);
@@ -234,6 +235,7 @@ static void tcp_do_read(grpc_exec_ctx *exec_ctx, grpc_tcp *tcp) {
   } while (read_bytes < 0 && errno == EINTR);
   GPR_TIMER_END("recvmsg", read_bytes >= 0);
 
+  // gpr_log(GPR_INFO,"read bytes %zi", read_bytes);
   if (read_bytes < 0) {
     /* NB: After calling call_read_cb a parallel call of the read handler may
      * be running. */

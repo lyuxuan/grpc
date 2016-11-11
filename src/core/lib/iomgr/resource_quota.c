@@ -277,11 +277,13 @@ typedef struct {
 
 static void ru_slice_ref(void *p) {
   ru_slice_refcount *rc = p;
+  // gpr_log(GPR_INFO, "ru_slice_ref %p %d -> %d", rc, (int)(rc->refs.count), (int)(rc->refs.count)+1);
   gpr_ref(&rc->refs);
 }
 
 static void ru_slice_unref(void *p) {
   ru_slice_refcount *rc = p;
+  // gpr_log(GPR_INFO, "ru_slice_unref %p %d -> %d", rc, (int)(rc->refs.count), (int)(rc->refs.count)-1);
   if (gpr_unref(&rc->refs)) {
     /* TODO(ctiller): this is dangerous, but I think safe for now:
        we have no guarantee here that we're at a safe point for creating an
@@ -293,8 +295,10 @@ static void ru_slice_unref(void *p) {
        is)
        if NULL */
     grpc_exec_ctx exec_ctx = GRPC_EXEC_CTX_INIT;
+    gpr_log(GPR_INFO, "ru_slice_unref %zi %p", rc->size, rc);
     grpc_resource_user_free(&exec_ctx, rc->resource_user, rc->size);
     grpc_exec_ctx_finish(&exec_ctx);
+
     gpr_free(rc);
   }
 }
@@ -302,6 +306,7 @@ static void ru_slice_unref(void *p) {
 static gpr_slice ru_slice_create(grpc_resource_user *resource_user,
                                  size_t size) {
   ru_slice_refcount *rc = gpr_malloc(sizeof(ru_slice_refcount) + size);
+  gpr_log(GPR_INFO, "ru_slice_create %zi %p", sizeof(ru_slice_refcount) + size, rc);
   rc->base.ref = ru_slice_ref;
   rc->base.unref = ru_slice_unref;
   gpr_ref_init(&rc->refs, 1);
@@ -311,6 +316,7 @@ static gpr_slice ru_slice_create(grpc_resource_user *resource_user,
   slice.refcount = &rc->base;
   slice.data.refcounted.bytes = (uint8_t *)(rc + 1);
   slice.data.refcounted.length = size;
+  // gpr_log(GPR_INFO, "ru_slice_create %p %d -> %d", rc, (int)(rc->refs.count), (int)(rc->refs.count));
   return slice;
 }
 

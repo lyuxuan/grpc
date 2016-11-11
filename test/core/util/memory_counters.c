@@ -33,7 +33,7 @@
 
 #include <stdint.h>
 #include <string.h>
-
+#include <stdio.h>
 #include <grpc/support/alloc.h>
 #include <grpc/support/sync.h>
 
@@ -51,12 +51,15 @@ static void *guard_malloc(size_t size) {
   size_t *ptr;
   if (!size) return NULL;
   gpr_mu_lock(&g_memory_mutex);
+
   g_memory_counters.total_size_absolute += size;
   g_memory_counters.total_size_relative += size;
   g_memory_counters.total_allocs_absolute++;
   g_memory_counters.total_allocs_relative++;
   gpr_mu_unlock(&g_memory_mutex);
   ptr = g_old_allocs.malloc_fn(size + sizeof(size));
+  printf("malloc,%d,%zi,%p\n", 1, size, ptr);
+  fflush(stdout);
   *ptr++ = size;
   return ptr;
 }
@@ -76,6 +79,8 @@ static void *guard_realloc(void *vptr, size_t size) {
   g_memory_counters.total_size_relative -= *ptr;
   g_memory_counters.total_size_relative += size;
   g_memory_counters.total_allocs_absolute++;
+  printf("realloc,%d,%zi,%zi,%p\n", 1, *ptr, size,vptr);
+  fflush(stdout);
   gpr_mu_unlock(&g_memory_mutex);
   ptr = g_old_allocs.realloc_fn(ptr, size + sizeof(size));
   *ptr++ = size;
@@ -89,6 +94,8 @@ static void guard_free(void *vptr) {
   gpr_mu_lock(&g_memory_mutex);
   g_memory_counters.total_size_relative -= *ptr;
   g_memory_counters.total_allocs_relative--;
+  printf("free,%d,%zi,%p\n", 1, *ptr, ptr);
+  fflush(stdout);
   gpr_mu_unlock(&g_memory_mutex);
   g_old_allocs.free_fn(ptr);
 }

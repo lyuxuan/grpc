@@ -211,17 +211,23 @@ int main(int argc, char **argv) {
 
   sc.init();
 
-  gpr_timespec end_warmup = GRPC_TIMEOUT_SECONDS_TO_DEADLINE(warmup_seconds);
-  gpr_timespec end_profiling =
-      GRPC_TIMEOUT_SECONDS_TO_DEADLINE(warmup_seconds + benchmark_seconds);
+  // gpr_timespec end_warmup = GRPC_TIMEOUT_SECONDS_TO_DEADLINE(warmup_seconds);
+  // gpr_timespec end_profiling =
+  //     GRPC_TIMEOUT_SECONDS_TO_DEADLINE(warmup_seconds + benchmark_seconds);
 
-  while (gpr_time_cmp(gpr_now(end_warmup.clock_type), end_warmup) < 0) {
+  // while (gpr_time_cmp(gpr_now(end_warmup.clock_type), end_warmup) < 0) {
+  //   sc.do_one_step();
+  // }
+
+  for (int k = 0; k<warmup_seconds; ++k) {
+    gpr_log(GPR_INFO, "---------%d------------", k);
     sc.do_one_step();
+    gpr_log(GPR_INFO, "---------%d------------", k);
   }
 
   gpr_log(GPR_INFO, "start profiling");
   grpc_profiler_start("client.prof");
-  while (gpr_time_cmp(gpr_now(end_profiling.clock_type), end_profiling) < 0) {
+  while (0) {
     start = now();
     sc.do_one_step();
     stop = now();
@@ -233,6 +239,7 @@ int main(int argc, char **argv) {
     grpc_call_destroy(call);
   }
 
+  gpr_log(GPR_INFO, "channel destroy start...");
   grpc_channel_destroy(channel);
   grpc_completion_queue_shutdown(cq);
   do {
