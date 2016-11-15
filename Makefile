@@ -931,10 +931,6 @@ endpoint_pair_test: $(BINDIR)/$(CONFIG)/endpoint_pair_test
 ev_epoll_linux_test: $(BINDIR)/$(CONFIG)/ev_epoll_linux_test
 fd_conservation_posix_test: $(BINDIR)/$(CONFIG)/fd_conservation_posix_test
 fd_posix_test: $(BINDIR)/$(CONFIG)/fd_posix_test
-fling_call_mem_client: $(BINDIR)/$(CONFIG)/fling_call_mem_client
-fling_call_mem_server: $(BINDIR)/$(CONFIG)/fling_call_mem_server
-fling_channel_mem_client: $(BINDIR)/$(CONFIG)/fling_channel_mem_client
-fling_channel_mem_server: $(BINDIR)/$(CONFIG)/fling_channel_mem_server
 fling_client: $(BINDIR)/$(CONFIG)/fling_client
 fling_server: $(BINDIR)/$(CONFIG)/fling_server
 fling_stream_test: $(BINDIR)/$(CONFIG)/fling_stream_test
@@ -1002,6 +998,8 @@ lame_client_test: $(BINDIR)/$(CONFIG)/lame_client_test
 lb_policies_test: $(BINDIR)/$(CONFIG)/lb_policies_test
 load_file_test: $(BINDIR)/$(CONFIG)/load_file_test
 low_level_ping_pong_benchmark: $(BINDIR)/$(CONFIG)/low_level_ping_pong_benchmark
+memory_profile_client: $(BINDIR)/$(CONFIG)/memory_profile_client
+memory_profile_server: $(BINDIR)/$(CONFIG)/memory_profile_server
 message_compress_test: $(BINDIR)/$(CONFIG)/message_compress_test
 mlog_test: $(BINDIR)/$(CONFIG)/mlog_test
 multiple_server_queues_test: $(BINDIR)/$(CONFIG)/multiple_server_queues_test
@@ -1274,10 +1272,6 @@ buildtests_c: privatelibs_c \
   $(BINDIR)/$(CONFIG)/ev_epoll_linux_test \
   $(BINDIR)/$(CONFIG)/fd_conservation_posix_test \
   $(BINDIR)/$(CONFIG)/fd_posix_test \
-  $(BINDIR)/$(CONFIG)/fling_call_mem_client \
-  $(BINDIR)/$(CONFIG)/fling_call_mem_server \
-  $(BINDIR)/$(CONFIG)/fling_channel_mem_client \
-  $(BINDIR)/$(CONFIG)/fling_channel_mem_server \
   $(BINDIR)/$(CONFIG)/fling_client \
   $(BINDIR)/$(CONFIG)/fling_server \
   $(BINDIR)/$(CONFIG)/fling_stream_test \
@@ -1334,6 +1328,8 @@ buildtests_c: privatelibs_c \
   $(BINDIR)/$(CONFIG)/lame_client_test \
   $(BINDIR)/$(CONFIG)/lb_policies_test \
   $(BINDIR)/$(CONFIG)/load_file_test \
+  $(BINDIR)/$(CONFIG)/memory_profile_client \
+  $(BINDIR)/$(CONFIG)/memory_profile_server \
   $(BINDIR)/$(CONFIG)/message_compress_test \
   $(BINDIR)/$(CONFIG)/mlog_test \
   $(BINDIR)/$(CONFIG)/multiple_server_queues_test \
@@ -7980,134 +7976,6 @@ endif
 endif
 
 
-FLING_CALL_MEM_CLIENT_SRC = \
-    test/core/call_mem_usage/client.c \
-
-FLING_CALL_MEM_CLIENT_OBJS = $(addprefix $(OBJDIR)/$(CONFIG)/, $(addsuffix .o, $(basename $(FLING_CALL_MEM_CLIENT_SRC))))
-ifeq ($(NO_SECURE),true)
-
-# You can't build secure targets if you don't have OpenSSL.
-
-$(BINDIR)/$(CONFIG)/fling_call_mem_client: openssl_dep_error
-
-else
-
-
-
-$(BINDIR)/$(CONFIG)/fling_call_mem_client: $(FLING_CALL_MEM_CLIENT_OBJS) $(LIBDIR)/$(CONFIG)/libgrpc_test_util.a $(LIBDIR)/$(CONFIG)/libgrpc.a $(LIBDIR)/$(CONFIG)/libgpr_test_util.a $(LIBDIR)/$(CONFIG)/libgpr.a
-	$(E) "[LD]      Linking $@"
-	$(Q) mkdir -p `dirname $@`
-	$(Q) $(LD) $(LDFLAGS) $(FLING_CALL_MEM_CLIENT_OBJS) $(LIBDIR)/$(CONFIG)/libgrpc_test_util.a $(LIBDIR)/$(CONFIG)/libgrpc.a $(LIBDIR)/$(CONFIG)/libgpr_test_util.a $(LIBDIR)/$(CONFIG)/libgpr.a $(LDLIBS) $(LDLIBS_SECURE) -o $(BINDIR)/$(CONFIG)/fling_call_mem_client
-
-endif
-
-$(OBJDIR)/$(CONFIG)/test/core/call_mem_usage/client.o:  $(LIBDIR)/$(CONFIG)/libgrpc_test_util.a $(LIBDIR)/$(CONFIG)/libgrpc.a $(LIBDIR)/$(CONFIG)/libgpr_test_util.a $(LIBDIR)/$(CONFIG)/libgpr.a
-
-deps_fling_call_mem_client: $(FLING_CALL_MEM_CLIENT_OBJS:.o=.dep)
-
-ifneq ($(NO_SECURE),true)
-ifneq ($(NO_DEPS),true)
--include $(FLING_CALL_MEM_CLIENT_OBJS:.o=.dep)
-endif
-endif
-
-
-FLING_CALL_MEM_SERVER_SRC = \
-    test/core/call_mem_usage/server.c \
-
-FLING_CALL_MEM_SERVER_OBJS = $(addprefix $(OBJDIR)/$(CONFIG)/, $(addsuffix .o, $(basename $(FLING_CALL_MEM_SERVER_SRC))))
-ifeq ($(NO_SECURE),true)
-
-# You can't build secure targets if you don't have OpenSSL.
-
-$(BINDIR)/$(CONFIG)/fling_call_mem_server: openssl_dep_error
-
-else
-
-
-
-$(BINDIR)/$(CONFIG)/fling_call_mem_server: $(FLING_CALL_MEM_SERVER_OBJS) $(LIBDIR)/$(CONFIG)/libgrpc_test_util.a $(LIBDIR)/$(CONFIG)/libgrpc.a $(LIBDIR)/$(CONFIG)/libgpr_test_util.a $(LIBDIR)/$(CONFIG)/libgpr.a
-	$(E) "[LD]      Linking $@"
-	$(Q) mkdir -p `dirname $@`
-	$(Q) $(LD) $(LDFLAGS) $(FLING_CALL_MEM_SERVER_OBJS) $(LIBDIR)/$(CONFIG)/libgrpc_test_util.a $(LIBDIR)/$(CONFIG)/libgrpc.a $(LIBDIR)/$(CONFIG)/libgpr_test_util.a $(LIBDIR)/$(CONFIG)/libgpr.a $(LDLIBS) $(LDLIBS_SECURE) -o $(BINDIR)/$(CONFIG)/fling_call_mem_server
-
-endif
-
-$(OBJDIR)/$(CONFIG)/test/core/call_mem_usage/server.o:  $(LIBDIR)/$(CONFIG)/libgrpc_test_util.a $(LIBDIR)/$(CONFIG)/libgrpc.a $(LIBDIR)/$(CONFIG)/libgpr_test_util.a $(LIBDIR)/$(CONFIG)/libgpr.a
-
-deps_fling_call_mem_server: $(FLING_CALL_MEM_SERVER_OBJS:.o=.dep)
-
-ifneq ($(NO_SECURE),true)
-ifneq ($(NO_DEPS),true)
--include $(FLING_CALL_MEM_SERVER_OBJS:.o=.dep)
-endif
-endif
-
-
-FLING_CHANNEL_MEM_CLIENT_SRC = \
-    test/core/channel_mem_usage/client.c \
-
-FLING_CHANNEL_MEM_CLIENT_OBJS = $(addprefix $(OBJDIR)/$(CONFIG)/, $(addsuffix .o, $(basename $(FLING_CHANNEL_MEM_CLIENT_SRC))))
-ifeq ($(NO_SECURE),true)
-
-# You can't build secure targets if you don't have OpenSSL.
-
-$(BINDIR)/$(CONFIG)/fling_channel_mem_client: openssl_dep_error
-
-else
-
-
-
-$(BINDIR)/$(CONFIG)/fling_channel_mem_client: $(FLING_CHANNEL_MEM_CLIENT_OBJS) $(LIBDIR)/$(CONFIG)/libgrpc_test_util.a $(LIBDIR)/$(CONFIG)/libgrpc.a $(LIBDIR)/$(CONFIG)/libgpr_test_util.a $(LIBDIR)/$(CONFIG)/libgpr.a
-	$(E) "[LD]      Linking $@"
-	$(Q) mkdir -p `dirname $@`
-	$(Q) $(LD) $(LDFLAGS) $(FLING_CHANNEL_MEM_CLIENT_OBJS) $(LIBDIR)/$(CONFIG)/libgrpc_test_util.a $(LIBDIR)/$(CONFIG)/libgrpc.a $(LIBDIR)/$(CONFIG)/libgpr_test_util.a $(LIBDIR)/$(CONFIG)/libgpr.a $(LDLIBS) $(LDLIBS_SECURE) -o $(BINDIR)/$(CONFIG)/fling_channel_mem_client
-
-endif
-
-$(OBJDIR)/$(CONFIG)/test/core/channel_mem_usage/client.o:  $(LIBDIR)/$(CONFIG)/libgrpc_test_util.a $(LIBDIR)/$(CONFIG)/libgrpc.a $(LIBDIR)/$(CONFIG)/libgpr_test_util.a $(LIBDIR)/$(CONFIG)/libgpr.a
-
-deps_fling_channel_mem_client: $(FLING_CHANNEL_MEM_CLIENT_OBJS:.o=.dep)
-
-ifneq ($(NO_SECURE),true)
-ifneq ($(NO_DEPS),true)
--include $(FLING_CHANNEL_MEM_CLIENT_OBJS:.o=.dep)
-endif
-endif
-
-
-FLING_CHANNEL_MEM_SERVER_SRC = \
-    test/core/channel_mem_usage/server.c \
-
-FLING_CHANNEL_MEM_SERVER_OBJS = $(addprefix $(OBJDIR)/$(CONFIG)/, $(addsuffix .o, $(basename $(FLING_CHANNEL_MEM_SERVER_SRC))))
-ifeq ($(NO_SECURE),true)
-
-# You can't build secure targets if you don't have OpenSSL.
-
-$(BINDIR)/$(CONFIG)/fling_channel_mem_server: openssl_dep_error
-
-else
-
-
-
-$(BINDIR)/$(CONFIG)/fling_channel_mem_server: $(FLING_CHANNEL_MEM_SERVER_OBJS) $(LIBDIR)/$(CONFIG)/libgrpc_test_util.a $(LIBDIR)/$(CONFIG)/libgrpc.a $(LIBDIR)/$(CONFIG)/libgpr_test_util.a $(LIBDIR)/$(CONFIG)/libgpr.a
-	$(E) "[LD]      Linking $@"
-	$(Q) mkdir -p `dirname $@`
-	$(Q) $(LD) $(LDFLAGS) $(FLING_CHANNEL_MEM_SERVER_OBJS) $(LIBDIR)/$(CONFIG)/libgrpc_test_util.a $(LIBDIR)/$(CONFIG)/libgrpc.a $(LIBDIR)/$(CONFIG)/libgpr_test_util.a $(LIBDIR)/$(CONFIG)/libgpr.a $(LDLIBS) $(LDLIBS_SECURE) -o $(BINDIR)/$(CONFIG)/fling_channel_mem_server
-
-endif
-
-$(OBJDIR)/$(CONFIG)/test/core/channel_mem_usage/server.o:  $(LIBDIR)/$(CONFIG)/libgrpc_test_util.a $(LIBDIR)/$(CONFIG)/libgrpc.a $(LIBDIR)/$(CONFIG)/libgpr_test_util.a $(LIBDIR)/$(CONFIG)/libgpr.a
-
-deps_fling_channel_mem_server: $(FLING_CHANNEL_MEM_SERVER_OBJS:.o=.dep)
-
-ifneq ($(NO_SECURE),true)
-ifneq ($(NO_DEPS),true)
--include $(FLING_CHANNEL_MEM_SERVER_OBJS:.o=.dep)
-endif
-endif
-
-
 FLING_CLIENT_SRC = \
     test/core/fling/client.c \
 
@@ -10248,6 +10116,70 @@ deps_low_level_ping_pong_benchmark: $(LOW_LEVEL_PING_PONG_BENCHMARK_OBJS:.o=.dep
 ifneq ($(NO_SECURE),true)
 ifneq ($(NO_DEPS),true)
 -include $(LOW_LEVEL_PING_PONG_BENCHMARK_OBJS:.o=.dep)
+endif
+endif
+
+
+MEMORY_PROFILE_CLIENT_SRC = \
+    test/core/memory_usage/client.c \
+
+MEMORY_PROFILE_CLIENT_OBJS = $(addprefix $(OBJDIR)/$(CONFIG)/, $(addsuffix .o, $(basename $(MEMORY_PROFILE_CLIENT_SRC))))
+ifeq ($(NO_SECURE),true)
+
+# You can't build secure targets if you don't have OpenSSL.
+
+$(BINDIR)/$(CONFIG)/memory_profile_client: openssl_dep_error
+
+else
+
+
+
+$(BINDIR)/$(CONFIG)/memory_profile_client: $(MEMORY_PROFILE_CLIENT_OBJS) $(LIBDIR)/$(CONFIG)/libgrpc_test_util.a $(LIBDIR)/$(CONFIG)/libgrpc.a $(LIBDIR)/$(CONFIG)/libgpr_test_util.a $(LIBDIR)/$(CONFIG)/libgpr.a
+	$(E) "[LD]      Linking $@"
+	$(Q) mkdir -p `dirname $@`
+	$(Q) $(LD) $(LDFLAGS) $(MEMORY_PROFILE_CLIENT_OBJS) $(LIBDIR)/$(CONFIG)/libgrpc_test_util.a $(LIBDIR)/$(CONFIG)/libgrpc.a $(LIBDIR)/$(CONFIG)/libgpr_test_util.a $(LIBDIR)/$(CONFIG)/libgpr.a $(LDLIBS) $(LDLIBS_SECURE) -o $(BINDIR)/$(CONFIG)/memory_profile_client
+
+endif
+
+$(OBJDIR)/$(CONFIG)/test/core/memory_usage/client.o:  $(LIBDIR)/$(CONFIG)/libgrpc_test_util.a $(LIBDIR)/$(CONFIG)/libgrpc.a $(LIBDIR)/$(CONFIG)/libgpr_test_util.a $(LIBDIR)/$(CONFIG)/libgpr.a
+
+deps_memory_profile_client: $(MEMORY_PROFILE_CLIENT_OBJS:.o=.dep)
+
+ifneq ($(NO_SECURE),true)
+ifneq ($(NO_DEPS),true)
+-include $(MEMORY_PROFILE_CLIENT_OBJS:.o=.dep)
+endif
+endif
+
+
+MEMORY_PROFILE_SERVER_SRC = \
+    test/core/memory_usage/server.c \
+
+MEMORY_PROFILE_SERVER_OBJS = $(addprefix $(OBJDIR)/$(CONFIG)/, $(addsuffix .o, $(basename $(MEMORY_PROFILE_SERVER_SRC))))
+ifeq ($(NO_SECURE),true)
+
+# You can't build secure targets if you don't have OpenSSL.
+
+$(BINDIR)/$(CONFIG)/memory_profile_server: openssl_dep_error
+
+else
+
+
+
+$(BINDIR)/$(CONFIG)/memory_profile_server: $(MEMORY_PROFILE_SERVER_OBJS) $(LIBDIR)/$(CONFIG)/libgrpc_test_util.a $(LIBDIR)/$(CONFIG)/libgrpc.a $(LIBDIR)/$(CONFIG)/libgpr_test_util.a $(LIBDIR)/$(CONFIG)/libgpr.a
+	$(E) "[LD]      Linking $@"
+	$(Q) mkdir -p `dirname $@`
+	$(Q) $(LD) $(LDFLAGS) $(MEMORY_PROFILE_SERVER_OBJS) $(LIBDIR)/$(CONFIG)/libgrpc_test_util.a $(LIBDIR)/$(CONFIG)/libgrpc.a $(LIBDIR)/$(CONFIG)/libgpr_test_util.a $(LIBDIR)/$(CONFIG)/libgpr.a $(LDLIBS) $(LDLIBS_SECURE) -o $(BINDIR)/$(CONFIG)/memory_profile_server
+
+endif
+
+$(OBJDIR)/$(CONFIG)/test/core/memory_usage/server.o:  $(LIBDIR)/$(CONFIG)/libgrpc_test_util.a $(LIBDIR)/$(CONFIG)/libgrpc.a $(LIBDIR)/$(CONFIG)/libgpr_test_util.a $(LIBDIR)/$(CONFIG)/libgpr.a
+
+deps_memory_profile_server: $(MEMORY_PROFILE_SERVER_OBJS:.o=.dep)
+
+ifneq ($(NO_SECURE),true)
+ifneq ($(NO_DEPS),true)
+-include $(MEMORY_PROFILE_SERVER_OBJS:.o=.dep)
 endif
 endif
 
