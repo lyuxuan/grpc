@@ -51,15 +51,21 @@ DEFINE_string(scenarios_json, "",
 DEFINE_bool(quit, false, "Quit the workers");
 DEFINE_string(search_param, "",
               "The parameter, whose value is to be searched for to achieve "
-              "targeted cpu load");
+              "targeted cpu load. For now, we have 'offered_load'. Later, "
+              "'num_channels', 'num_outstanding_requests', etc. shall be "
+              "added.");
 DEFINE_double(
     initial_search_value, 0.0,
     "initial parameter value to start the search with (i.e. lower bound)");
 DEFINE_double(targeted_cpu_load, 70.0,
               "Targeted cpu load (unit: %, range [0,100])");
-DEFINE_double(precision, 1,
-              "Threshold for the search range, below which will end the "
-              "search. Also defines each stride of the search.");
+DEFINE_double(stride, 1,
+              "Defines each stride of the search. The larger the stride is, "
+              "the coarser the result will be, but will also be faster.");
+DEFINE_double(error_tolerance, 0.01,
+              "Defines threshold for stopping the search. When current search "
+              "range is narrower than the error_tolerance computed range, we "
+              "stop the search.");
 
 namespace grpc {
 namespace testing {
@@ -105,7 +111,7 @@ static double GetCpuLoad(Scenario* scenario, double offered_load,
 
 static double BinarySearch(Scenario* scenario, double targeted_cpu_load,
                            double low, double high, bool* success) {
-  while (low <= high - FLAGS_precision) {
+  while (low <= high * (1 - FLAGS_error_tolerance)) {
     double mid = low + (high - low) / 2;
     double current_cpu_load = GetCpuLoad(scenario, mid, success);
     gpr_log(GPR_DEBUG, "Binary Search: current_offered_load %.0f", mid);
@@ -113,12 +119,10 @@ static double BinarySearch(Scenario* scenario, double targeted_cpu_load,
       gpr_log(GPR_ERROR, "Client/Server Failure");
       break;
     }
-    if (targeted_cpu_load < current_cpu_load) {
-      high = mid - FLAGS_precision;
-    } else if (targeted_cpu_load > current_cpu_load) {
-      low = mid + FLAGS_precision;
+    if (targeted_cpu_load <= current_cpu_load) {
+      high = mid - FLAGS_stride;
     } else {
-      high = mid - FLAGS_precision;
+      low = mid + FLAGS_stride;
     }
   }
 

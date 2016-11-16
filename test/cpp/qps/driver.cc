@@ -151,10 +151,6 @@ static void postprocess_scenario_result(ScenarioResult* result) {
                             sum(result->server_stats(), ServerWallTime);
   auto server_user_time = 100.0 * sum(result->server_stats(), ServerUserTime) /
                           sum(result->server_stats(), ServerWallTime);
-  auto server_cpu_usage =
-      100 -
-      100 * average(result->server_stats(), ServerIdleCpuTime) /
-          average(result->server_stats(), ServerTotalCpuTime);
 
   auto client_system_time = 100.0 * sum(result->client_stats(), SystemTime) /
                             sum(result->client_stats(), WallTime);
@@ -165,7 +161,18 @@ static void postprocess_scenario_result(ScenarioResult* result) {
   result->mutable_summary()->set_server_user_time(server_user_time);
   result->mutable_summary()->set_client_system_time(client_system_time);
   result->mutable_summary()->set_client_user_time(client_user_time);
-  result->mutable_summary()->set_server_cpu_usage(server_cpu_usage);
+
+  // For Non-linux platform, get_cpu_usage() is not implemented. Thus,
+  // ServerTotalCpuTime and ServerIdleCpuTime are both 0.
+  if (average(result->server_stats(), ServerTotalCpuTime) == 0) {
+    result->mutable_summary()->set_server_cpu_usage(0);
+  } else {
+    auto server_cpu_usage =
+        100 -
+        100 * average(result->server_stats(), ServerIdleCpuTime) /
+            average(result->server_stats(), ServerTotalCpuTime);
+    result->mutable_summary()->set_server_cpu_usage(server_cpu_usage);
+  }
 
   if (result->request_results_size() > 0) {
     int64_t successes = 0;
@@ -185,30 +192,6 @@ static void postprocess_scenario_result(ScenarioResult* result) {
   }
 }
 
-// Namespace for classes and functions used only in RunScenario
-// Using this rather than local definitions to workaround gcc-4.4 limitations
-// regarding using templates without linkage
-namespace runsc {
-
-// ClientContext allocator
-static ClientContext* AllocContext(list<ClientContext>* contexts) {
-  contexts->emplace_back();
-  auto context = &contexts->back();
-  context->set_wait_for_ready(true);
-  return context;
-}
-
-struct ServerData {
-  unique_ptr<WorkerService::Stub> stub;
-  unique_ptr<ClientReaderWriter<ServerArgs, ServerStatus>> stream;
-};
-
-struct ClientData {
-  unique_ptr<WorkerService::Stub> stub;
-  unique_ptr<ClientReaderWriter<ClientArgs, ClientStatus>> stream;
-};
-}  // namespace runsc
-
 std::unique_ptr<ScenarioResult> RunScenario(
     const ClientConfig& initial_client_config, size_t num_clients,
     const ServerConfig& initial_server_config, size_t num_servers,
@@ -218,6 +201,12 @@ std::unique_ptr<ScenarioResult> RunScenario(
 
   // ClientContext allocations (all are destroyed at scope exit)
   list<ClientContext> contexts;
+  auto alloc_context = [](list<ClientContext>* contexts) {
+    contexts->emplace_back();
+    auto context = &contexts->back();
+    context->set_wait_for_ready(true);
+    return context;
+  };
 
   // To be added to the result, containing the final configuration used for
   // client and config (including host, etc.)
@@ -270,10 +259,11 @@ std::unique_ptr<ScenarioResult> RunScenario(
   workers.resize(num_clients + num_servers);
 
   // Start servers
-  using runsc::ServerData;
-  // servers is array rather than std::vector to avoid gcc-4.4 issues
-  // where class contained in std::vector must have a copy constructor
-  auto* servers = new ServerData[num_servers];
+  struct ServerData {
+    unique_ptr<WorkerService::Stub> stub;
+    unique_ptr<ClientReaderWriter<ServerArgs, ServerStatus>> stream;
+  };
+  std::vector<ServerData> servers(num_servers);
   for (size_t i = 0; i < num_servers; i++) {
     gpr_log(GPR_INFO, "Starting server on %s (worker #%" PRIuPTR ")",
             workers[i].c_str(), i);
@@ -317,8 +307,7 @@ std::unique_ptr<ScenarioResult> RunScenario(
 
     ServerArgs args;
     *args.mutable_setup() = server_config;
-    servers[i].stream =
-        servers[i].stub->RunServer(runsc::AllocContext(&contexts));
+    servers[i].stream = servers[i].stub->RunServer(alloc_context(&contexts));
     if (!servers[i].stream->Write(args)) {
       gpr_log(GPR_ERROR, "Could not write args to server %zu", i);
     }
@@ -336,10 +325,11 @@ std::unique_ptr<ScenarioResult> RunScenario(
   // Targets are all set by now
   result_client_config = client_config;
   // Start clients
-  using runsc::ClientData;
-  // clients is array rather than std::vector to avoid gcc-4.4 issues
-  // where class contained in std::vector must have a copy constructor
-  auto* clients = new ClientData[num_clients];
+  struct ClientData {
+    unique_ptr<WorkerService::Stub> stub;
+    unique_ptr<ClientReaderWriter<ClientArgs, ClientStatus>> stream;
+  };
+  std::vector<ClientData> clients(num_clients);
   size_t channels_allocated = 0;
   for (size_t i = 0; i < num_clients; i++) {
     const auto& worker = workers[i + num_servers];
@@ -388,8 +378,7 @@ std::unique_ptr<ScenarioResult> RunScenario(
 
     ClientArgs args;
     *args.mutable_setup() = per_client_config;
-    clients[i].stream =
-        clients[i].stub->RunClient(runsc::AllocContext(&contexts));
+    clients[i].stream = clients[i].stub->RunClient(alloc_context(&contexts));
     if (!clients[i].stream->Write(args)) {
       gpr_log(GPR_ERROR, "Could not write args to client %zu", i);
     }
@@ -509,7 +498,6 @@ std::unique_ptr<ScenarioResult> RunScenario(
               s.error_message().c_str());
     }
   }
-  delete[] clients;
 
   merged_latencies.FillProto(result->mutable_latencies());
   for (std::unordered_map<int, int64_t>::iterator it = merged_statuses.begin();
@@ -551,8 +539,6 @@ std::unique_ptr<ScenarioResult> RunScenario(
               s.error_message().c_str());
     }
   }
-
-  delete[] servers;
 
   postprocess_scenario_result(result.get());
   return result;
