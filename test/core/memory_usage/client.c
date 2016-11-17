@@ -158,20 +158,20 @@ static struct grpc_memory_counters send_snapshot_request(
 
   grpc_byte_buffer_reader reader;
   GPR_ASSERT(grpc_byte_buffer_reader_init(&reader, response_payload_recv));
-  gpr_slice response = grpc_byte_buffer_reader_readall(&reader);
+  grpc_slice response = grpc_byte_buffer_reader_readall(&reader);
 
   struct grpc_memory_counters snapshot;
   snapshot.total_size_absolute =
-      ((struct grpc_memory_counters *)GPR_SLICE_START_PTR(response))
+      ((struct grpc_memory_counters *)GRPC_SLICE_START_PTR(response))
           ->total_size_absolute;
   snapshot.total_allocs_absolute =
-      ((struct grpc_memory_counters *)GPR_SLICE_START_PTR(response))
+      ((struct grpc_memory_counters *)GRPC_SLICE_START_PTR(response))
           ->total_allocs_absolute;
   snapshot.total_size_relative =
-      ((struct grpc_memory_counters *)GPR_SLICE_START_PTR(response))
+      ((struct grpc_memory_counters *)GRPC_SLICE_START_PTR(response))
           ->total_size_relative;
   snapshot.total_allocs_relative =
-      ((struct grpc_memory_counters *)GPR_SLICE_START_PTR(response))
+      ((struct grpc_memory_counters *)GRPC_SLICE_START_PTR(response))
           ->total_allocs_relative;
 
   GPR_ASSERT(snapshot.total_size_absolute > 0);
@@ -184,7 +184,7 @@ static struct grpc_memory_counters send_snapshot_request(
   // snapshot.total_allocs_relative);
 
   // gpr_slice_unref(request_payload_slice);
-  gpr_slice_unref(response);
+  grpc_slice_unref(response);
   grpc_byte_buffer_reader_destroy(&reader);
   gpr_free(calls[call_idx].details);
   calls[call_idx].details = NULL;
@@ -209,7 +209,7 @@ static const scenario scenarios[] = {
 
 int main(int argc, char **argv) {
   grpc_memory_counters_init();
-  gpr_slice slice = gpr_slice_from_copied_string("x");
+  grpc_slice slice = grpc_slice_from_copied_string("x");
   unsigned i;
 
   char *fake_argv[1];
@@ -384,7 +384,7 @@ int main(int argc, char **argv) {
   } while (event.type != GRPC_QUEUE_SHUTDOWN);
 
   grpc_completion_queue_destroy(cq);
-  gpr_slice_unref(slice);
+  grpc_slice_unref(slice);
   grpc_shutdown();
 
   gpr_log(GPR_INFO, "before server create %zi",

@@ -46,7 +46,7 @@
 static void maybe_embiggen(grpc_slice_buffer *sb) {
   if (sb->count == sb->capacity) {
     sb->capacity = GROW(sb->capacity);
-    gpr_log(GPR_INFO, "buffer enlarged to %zi bytes", sb->capacity);
+    gpr_log(GPR_INFO, "buffer enlarged to %zi * 24 bytes", sb->capacity);
     GPR_ASSERT(sb->capacity > sb->count);
     if (sb->slices == sb->inlined) {
       sb->slices = gpr_malloc(sb->capacity * sizeof(grpc_slice));

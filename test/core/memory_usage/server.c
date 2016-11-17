@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2015, Google Inc.
+ * Copyright 2016, Google Inc.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -131,8 +131,8 @@ static void send_snapshot(void *tag, struct grpc_memory_counters snapshot) {
   gpr_log(GPR_INFO, "relative %zi %zi", snapshot.total_size_relative,
           snapshot.total_allocs_relative);
 
-  gpr_slice snapshot_slice =
-      gpr_slice_new(&snapshot, sizeof(snapshot), gpr_free);
+  grpc_slice snapshot_slice =
+      grpc_slice_new(&snapshot, sizeof(snapshot), gpr_free);
   payload_buffer = grpc_raw_byte_buffer_create(&snapshot_slice, 1);
   grpc_metadata_array_init(&(*(fling_call *)tag).initial_metadata_send);
 
