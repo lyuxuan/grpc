@@ -289,30 +289,26 @@ int main(int argc, char **argv) {
   grpc_shutdown();
 
   gpr_log(GPR_INFO, "---------client stats--------");
-  gpr_log(GPR_INFO, "client memory usage: %f bytes per call",
+  gpr_log(GPR_INFO, "client call memory usage: %f bytes per call",
           (double)(client_calls_inflight.total_size_relative -
                    client_benchmark_calls_start.total_size_relative) /
               benchmark_iterations);
-  gpr_log(GPR_INFO, "client channel memory usage %zi bytes %zi allocs.",
+  gpr_log(GPR_INFO, "client channel memory usage %zi bytes",
           client_channel_end.total_size_relative -
-              client_channel_start.total_size_relative,
-          client_channel_end.total_allocs_relative -
-              client_channel_start.total_allocs_relative);
+              client_channel_start.total_size_relative);
 
   gpr_log(GPR_INFO, "---------server stats--------");
   gpr_log(GPR_INFO, "server create: %zi bytes",
           after_server_create.total_size_relative -
               before_server_create.total_size_relative);
-  gpr_log(GPR_INFO, "server per call cost: %f bytes",
+  gpr_log(GPR_INFO, "server call memory usage: %f bytes per call",
           (double)(server_calls_inflight.total_size_relative -
                    server_benchmark_calls_start.total_size_relative) /
               benchmark_iterations);
-  gpr_log(GPR_INFO, "server channel: %zi bytes",
+  gpr_log(GPR_INFO, "server channel memory usage %zi bytes",
           server_calls_end.total_size_relative -
               after_server_create.total_size_relative);
-  gpr_log(GPR_INFO, "The end: relative %zi, %zi",
-          grpc_memory_counters_snapshot().total_allocs_relative,
-          grpc_memory_counters_snapshot().total_size_relative);
+
   grpc_memory_counters_destroy();
   return 0;
 }

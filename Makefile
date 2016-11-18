@@ -1015,6 +1015,7 @@ load_file_test: $(BINDIR)/$(CONFIG)/load_file_test
 low_level_ping_pong_benchmark: $(BINDIR)/$(CONFIG)/low_level_ping_pong_benchmark
 memory_profile_client: $(BINDIR)/$(CONFIG)/memory_profile_client
 memory_profile_server: $(BINDIR)/$(CONFIG)/memory_profile_server
+memory_profile_test: $(BINDIR)/$(CONFIG)/memory_profile_test
 message_compress_test: $(BINDIR)/$(CONFIG)/message_compress_test
 mlog_test: $(BINDIR)/$(CONFIG)/mlog_test
 multiple_server_queues_test: $(BINDIR)/$(CONFIG)/multiple_server_queues_test
@@ -1351,6 +1352,7 @@ buildtests_c: privatelibs_c \
   $(BINDIR)/$(CONFIG)/load_file_test \
   $(BINDIR)/$(CONFIG)/memory_profile_client \
   $(BINDIR)/$(CONFIG)/memory_profile_server \
+  $(BINDIR)/$(CONFIG)/memory_profile_test \
   $(BINDIR)/$(CONFIG)/message_compress_test \
   $(BINDIR)/$(CONFIG)/mlog_test \
   $(BINDIR)/$(CONFIG)/multiple_server_queues_test \
@@ -1740,6 +1742,8 @@ test_c: buildtests_c
 	$(Q) $(BINDIR)/$(CONFIG)/lame_client_test || ( echo test lame_client_test failed ; exit 1 )
 	$(E) "[RUN]     Testing load_file_test"
 	$(Q) $(BINDIR)/$(CONFIG)/load_file_test || ( echo test load_file_test failed ; exit 1 )
+	$(E) "[RUN]     Testing memory_profile_test"
+	$(Q) $(BINDIR)/$(CONFIG)/memory_profile_test || ( echo test memory_profile_test failed ; exit 1 )
 	$(E) "[RUN]     Testing message_compress_test"
 	$(Q) $(BINDIR)/$(CONFIG)/message_compress_test || ( echo test message_compress_test failed ; exit 1 )
 	$(E) "[RUN]     Testing multiple_server_queues_test"
@@ -6808,19 +6812,6 @@ endif
 
 
 LIBGOOGLE_BENCHMARK_SRC = \
-    third_party/google_benchmark/src/benchmark.cc \
-    third_party/google_benchmark/src/benchmark_register.cc \
-    third_party/google_benchmark/src/colorprint.cc \
-    third_party/google_benchmark/src/commandlineflags.cc \
-    third_party/google_benchmark/src/complexity.cc \
-    third_party/google_benchmark/src/console_reporter.cc \
-    third_party/google_benchmark/src/csv_reporter.cc \
-    third_party/google_benchmark/src/json_reporter.cc \
-    third_party/google_benchmark/src/reporter.cc \
-    third_party/google_benchmark/src/sleep.cc \
-    third_party/google_benchmark/src/string_util.cc \
-    third_party/google_benchmark/src/sysinfo.cc \
-    third_party/google_benchmark/src/timers.cc \
 
 PUBLIC_HEADERS_CXX += \
 
@@ -10141,6 +10132,38 @@ deps_memory_profile_server: $(MEMORY_PROFILE_SERVER_OBJS:.o=.dep)
 ifneq ($(NO_SECURE),true)
 ifneq ($(NO_DEPS),true)
 -include $(MEMORY_PROFILE_SERVER_OBJS:.o=.dep)
+endif
+endif
+
+
+MEMORY_PROFILE_TEST_SRC = \
+    test/core/memory_usage/memory_usage_test.c \
+
+MEMORY_PROFILE_TEST_OBJS = $(addprefix $(OBJDIR)/$(CONFIG)/, $(addsuffix .o, $(basename $(MEMORY_PROFILE_TEST_SRC))))
+ifeq ($(NO_SECURE),true)
+
+# You can't build secure targets if you don't have OpenSSL.
+
+$(BINDIR)/$(CONFIG)/memory_profile_test: openssl_dep_error
+
+else
+
+
+
+$(BINDIR)/$(CONFIG)/memory_profile_test: $(MEMORY_PROFILE_TEST_OBJS) $(LIBDIR)/$(CONFIG)/libgrpc_test_util.a $(LIBDIR)/$(CONFIG)/libgrpc.a $(LIBDIR)/$(CONFIG)/libgpr_test_util.a $(LIBDIR)/$(CONFIG)/libgpr.a
+	$(E) "[LD]      Linking $@"
+	$(Q) mkdir -p `dirname $@`
+	$(Q) $(LD) $(LDFLAGS) $(MEMORY_PROFILE_TEST_OBJS) $(LIBDIR)/$(CONFIG)/libgrpc_test_util.a $(LIBDIR)/$(CONFIG)/libgrpc.a $(LIBDIR)/$(CONFIG)/libgpr_test_util.a $(LIBDIR)/$(CONFIG)/libgpr.a $(LDLIBS) $(LDLIBS_SECURE) -o $(BINDIR)/$(CONFIG)/memory_profile_test
+
+endif
+
+$(OBJDIR)/$(CONFIG)/test/core/memory_usage/memory_usage_test.o:  $(LIBDIR)/$(CONFIG)/libgrpc_test_util.a $(LIBDIR)/$(CONFIG)/libgrpc.a $(LIBDIR)/$(CONFIG)/libgpr_test_util.a $(LIBDIR)/$(CONFIG)/libgpr.a
+
+deps_memory_profile_test: $(MEMORY_PROFILE_TEST_OBJS:.o=.dep)
+
+ifneq ($(NO_SECURE),true)
+ifneq ($(NO_DEPS),true)
+-include $(MEMORY_PROFILE_TEST_OBJS:.o=.dep)
 endif
 endif
 
