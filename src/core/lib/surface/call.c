@@ -637,9 +637,6 @@ static int prepare_application_metadata(grpc_call *call, int count,
     if (call->send_extra_metadata_count == 0) {
       prepend_extra_metadata = 0;
     } else {
-      for (i = 0; i < call->send_extra_metadata_count; i++) {
-        GRPC_MDELEM_REF(call->send_extra_metadata[i].md);
-      }
       for (i = 1; i < call->send_extra_metadata_count; i++) {
         call->send_extra_metadata[i].prev = &call->send_extra_metadata[i - 1];
       }
@@ -685,6 +682,7 @@ static int prepare_application_metadata(grpc_call *call, int count,
           &call->send_extra_metadata[call->send_extra_metadata_count - 1];
       batch->list.head->prev = NULL;
       batch->list.tail->next = NULL;
+      call->send_extra_metadata_count = 0;
       break;
     case 3: {
       /* prepend AND md */
@@ -700,6 +698,7 @@ static int prepare_application_metadata(grpc_call *call, int count,
       batch->list.tail = linked_from_md(last_md);
       batch->list.head->prev = NULL;
       batch->list.tail->next = NULL;
+      call->send_extra_metadata_count = 0;
       break;
     }
     default:
@@ -1552,6 +1551,10 @@ static grpc_call_error call_start_batch(grpc_exec_ctx *exec_ctx,
           error = GRPC_CALL_ERROR_TOO_MANY_OPERATIONS;
           goto done_with_error;
         }
+        /* IF this is a server, then GRPC_OP_RECV_INITIAL_METADATA *must* come
+           from server.c. In that case, it's coming from accept_stream, and in
+           that case we're not necessarily covered by a poller. */
+        stream_op->covered_by_poller = call->is_client;
         call->received_initial_metadata = 1;
         call->buffered_metadata[0] = op->data.recv_initial_metadata;
         grpc_closure_init(&call->receiving_initial_metadata_ready,
