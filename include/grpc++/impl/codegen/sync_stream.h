@@ -228,6 +228,7 @@ class ClientWriter : public ClientWriterInterface<W> {
   ClientWriter(ChannelInterface* channel, const RpcMethod& method,
                ClientContext* context, WriteOptions options, R* response)
       : context_(context), call_(channel->CreateCall(method, context, &cq_)) {
+    //TODO: probably need some handling for writeoptions
     finish_ops_.RecvMessage(response);
     finish_ops_.AllowNoMessage();
 
@@ -240,17 +241,24 @@ class ClientWriter : public ClientWriterInterface<W> {
 
   template <class R>
   ClientWriter(ChannelInterface* channel, const RpcMethod& method,
-               const W first_message, ClientContext* context, const R* response)
+               const W& first_message, WriteOptions options, ClientContext* context, const R* response)
       : context_(context), call_(channel->CreateCall(method, context, &cq_)) {
-    finish_ops_.RecvMessage(response);
-    finish_ops_.AllowNoMessage();
+    if (options.is_last_message()) {
+      WriteLast(first_message, options);
+    }
+    else {
+      //TODO: probably need some handling for writeoptions
+      finish_ops_.RecvMessage(response);
+      finish_ops_.AllowNoMessage();
 
-    CallOpSet<CallOpSendInitialMetadata> ops;
-    ops.SendInitialMetadata(context->send_initial_metadata_,
-                            context->initial_metadata_flags());
-    call_.PerformOps(&ops);
-    cq_.Pluck(&ops);
+      CallOpSet<CallOpSendInitialMetadata> ops;
+      ops.SendInitialMetadata(context->send_initial_metadata_,
+                              context->initial_metadata_flags());
+      call_.PerformOps(&ops);
+      cq_.Pluck(&ops);
+    }
   }
+
   void WaitForInitialMetadata() {
     GPR_CODEGEN_ASSERT(!context_->initial_metadata_received_);
 
@@ -335,6 +343,28 @@ class ClientReaderWriter final : public ClientReaderWriterInterface<W, R> {
   ClientReaderWriter(ChannelInterface* channel, const RpcMethod& method,
                      ClientContext* context)
       : context_(context), call_(channel->CreateCall(method, context, &cq_)) {
+    CallOpSet<CallOpSendInitialMetadata> ops;
+    ops.SendInitialMetadata(context->send_initial_metadata_,
+                            context->initial_metadata_flags());
+    call_.PerformOps(&ops);
+    cq_.Pluck(&ops);
+  }
+
+  ClientReaderWriter(ChannelInterface* channel, const RpcMethod& method,
+                     ClientContext* context, WriteOptions options)
+  // TODO: probably need some special handling for writeoptions
+      : context_(context), call_(channel->CreateCall(method, context, &cq_)) {
+    CallOpSet<CallOpSendInitialMetadata> ops;
+    ops.SendInitialMetadata(context->send_initial_metadata_,
+                            context->initial_metadata_flags());
+    call_.PerformOps(&ops);
+    cq_.Pluck(&ops);
+  }
+
+  ClientReaderWriter(ChannelInterface* channel, const RpcMethod& method,
+                     ClientContext* context, const W& first_message, WriteOptions options)
+      : context_(context), call_(channel->CreateCall(method, context, &cq_)) {
+// TODO: special handling for first message and options
     CallOpSet<CallOpSendInitialMetadata> ops;
     ops.SendInitialMetadata(context->send_initial_metadata_,
                             context->initial_metadata_flags());
@@ -480,7 +510,7 @@ class ServerWriter final : public ServerWriterInterface<W> {
   using WriterInterface<W>::Write;
   bool Write(const W& msg, WriteOptions options) override {
     if (options.is_last_message()) {
-      optons.set_buffer_hint();
+      options.set_buffer_hint();
     }
     CallOpSet<CallOpSendInitialMetadata, CallOpSendMessage> ops;
     if (!ops.SendMessage(msg, options).ok()) {
