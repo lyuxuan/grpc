@@ -104,8 +104,8 @@ class AsyncWriterInterface {
 
   virtual void Write(const W& msg, WriteOptions options, void* tag) = 0;
 
-  void WriteLast(const w& msg, WriteOptions options, void* tag) {
-    Write(W & msg, options.set_last_message(), tag);
+  void WriteLast(const W& msg, WriteOptions options, void* tag) {
+    Write(msg, options.set_last_message(), tag);
   }
 };
 
@@ -196,6 +196,41 @@ class ClientAsyncWriter final : public ClientAsyncWriterInterface<W> {
     call_.PerformOps(&init_ops_);
   }
 
+  template <class R>
+  ClientAsyncWriter(ChannelInterface* channel, CompletionQueue* cq,
+                    const RpcMethod& method, ClientContext* context, WriteOptions options,
+                    R* response, void* tag)
+      : context_(context), call_(channel->CreateCall(method, context, cq)) {
+// TODO:special handling for writeoptions
+    finish_ops_.RecvMessage(response);
+    finish_ops_.AllowNoMessage();
+
+    init_ops_.set_output_tag(tag);
+    init_ops_.SendInitialMetadata(context->send_initial_metadata_,
+                                  context->initial_metadata_flags());
+    call_.PerformOps(&init_ops_);
+  }
+
+  template <class R>
+  ClientAsyncWriter(ChannelInterface* channel, CompletionQueue* cq,
+                    const RpcMethod& method, ClientContext* context, const W& first_message, WriteOptions options,
+                    R* response, void* tag)
+      : context_(context), call_(channel->CreateCall(method, context, cq)) {
+    if (options.is_last_message()) {
+      WriteLast(first_message, options);
+    }
+    else {
+    // TODO: what about unused first message and write options
+      finish_ops_.RecvMessage(response);
+      finish_ops_.AllowNoMessage();
+
+      init_ops_.set_output_tag(tag);
+      init_ops_.SendInitialMetadata(context->send_initial_metadata_,
+                                    context->initial_metadata_flags());
+      call_.PerformOps(&init_ops_);
+    }
+  }
+
   void ReadInitialMetadata(void* tag) override {
     GPR_CODEGEN_ASSERT(!context_->initial_metadata_received_);
 
@@ -269,6 +304,28 @@ class ClientAsyncReaderWriter final
                           const RpcMethod& method, ClientContext* context,
                           void* tag)
       : context_(context), call_(channel->CreateCall(method, context, cq)) {
+    init_ops_.set_output_tag(tag);
+    init_ops_.SendInitialMetadata(context->send_initial_metadata_,
+                                  context->initial_metadata_flags());
+    call_.PerformOps(&init_ops_);
+  }
+
+  ClientAsyncReaderWriter(ChannelInterface* channel, CompletionQueue* cq,
+                          const RpcMethod& method, ClientContext* context, WriteOptions options,
+                          void* tag)
+      : context_(context), call_(channel->CreateCall(method, context, cq)) {
+    // TODO: probably need some special handling for write options. store somewhere?
+    init_ops_.set_output_tag(tag);
+    init_ops_.SendInitialMetadata(context->send_initial_metadata_,
+                                  context->initial_metadata_flags());
+    call_.PerformOps(&init_ops_);
+  }
+
+  ClientAsyncReaderWriter(ChannelInterface* channel, CompletionQueue* cq,
+                          const RpcMethod& method, ClientContext* context, const W& first_message, WriteOptions options,
+                          void* tag)
+      : context_(context), call_(channel->CreateCall(method, context, cq)) {
+    // TODO: what to do with first_message and options
     init_ops_.set_output_tag(tag);
     init_ops_.SendInitialMetadata(context->send_initial_metadata_,
                                   context->initial_metadata_flags());
@@ -423,7 +480,7 @@ class ServerAsyncWriterInterface : public ServerAsyncStreamingInterface,
   virtual void Finish(const Status& status, void* tag) = 0;
 
   virtual void WriteAndFinish(const W& msg, WriteOptions options,
-                              const Status& status void* tag) = 0;
+                              const Status& status, void* tag) = 0;
 };
 
 template <class W>
@@ -478,7 +535,7 @@ class ServerAsyncWriter final : public ServerAsyncWriterInterface<W> {
   }
 
   void WriteAndFinish(const W& msg, WriteOptions options,
-                      const Status& status void* tag) {
+                      const Status& status, void* tag) {
     write_and_finish_ops_.set_output_tag(tag);
     if (options.is_last_message()) {
       options.set_buffer_hint();
@@ -531,7 +588,7 @@ class ServerAsyncReaderWriterInterface : public ServerAsyncStreamingInterface,
  public:
   virtual void Finish(const Status& status, void* tag) = 0;
   virtual void WriteAndFinish(const W& msg, WriteOptions options,
-                              const Status& status void* tag) = 0;
+                              const Status& status, void* tag) = 0;
 };
 
 template <class W, class R>
@@ -593,7 +650,7 @@ class ServerAsyncReaderWriter final
   }
 
   void WriteAndFinish(const W& msg, WriteOptions options,
-                      const Status& status void* tag) {
+                      const Status& status, void* tag) {
     write_and_finish_ops_.set_output_tag(tag);
     if (!ctx_->sent_initial_metadata_) {
       write_and_finish_ops_.SendInitialMetadata(ctx_->initial_metadata_,

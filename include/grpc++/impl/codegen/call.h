@@ -418,53 +418,67 @@ class CallOpGenericRecvMessage {
 
 class CallOpClientSendClose {
  public:
-  CallOpClientSendClose()
-      : send_(false) msg
+  CallOpClientSendClose() : send_(false) {}
 
-        class CallOpServerSendStatus {
-   public:
-    CallOpServerSendStatus() : send_status_available_(false) {}
+  void ClientSendClose() { send_ = true; }
 
-    void ServerSendStatus(
-        const std::multimap<grpc::string, grpc::string>& trailing_metadata,
-        const Status& status) {
-      trailing_metadata_count_ = trailing_metadata.size();
-      trailing_metadata_ = FillMetadataArray(trailing_metadata);
-      send_status_available_ = true;
-      send_status_code_ =
-          static_cast<grpc_status_code>(GetCanonicalCode(status));
-      send_status_details_ = status.error_message();
-    }
+ protected:
+  void AddOp(grpc_op* ops, size_t* nops) {
+    if (!send_) return;
+    grpc_op* op = &ops[(*nops)++];
+    op->op = GRPC_OP_SEND_CLOSE_FROM_CLIENT;
+    op->flags = 0;
+    op->reserved = NULL;
+  }
+  void FinishOp(bool* status) { send_ = false; }
 
-   protected:
-    void AddOp(grpc_op* ops, size_t* nops) {
-      if (!send_status_available_) return;
-      grpc_op* op = &ops[(*nops)++];
-      op->op = GRPC_OP_SEND_STATUS_FROM_SERVER;
-      op->data.send_status_from_server.trailing_metadata_count =
-          trailing_metadata_count_;
-      op->data.send_status_from_server.trailing_metadata = trailing_metadata_;
-      op->data.send_status_from_server.status = send_status_code_;
-      status_details_slice_ = SliceReferencingString(send_status_details_);
-      op->data.send_status_from_server.status_details =
-          send_status_details_.empty() ? nullptr : &status_details_slice_;
-      op->flags = 0;
-      op->reserved = NULL;
-    }
+ private:
+  bool send_;
+};
 
-    void FinishOp(bool* status) {
-      if (!send_status_available_) return;
-      g_core_codegen_interface->gpr_free(trailing_metadata_);
-      send_status_available_ = false;
-    }
+class CallOpServerSendStatus {
+ public:
+  CallOpServerSendStatus() : send_status_available_(false) {}
 
-   private:
-    bool send_status_available_;
-    grpc_status_code send_status_code_;
-    grpc::string send_status_details_;
-    size_t trailing_metadata_count_;
-    grpc_metadata* trailing_metadata_;
-    grpc_slice status_details_slice_;
+  void ServerSendStatus(
+      const std::multimap<grpc::string, grpc::string>& trailing_metadata,
+      const Status& status) {
+    trailing_metadata_count_ = trailing_metadata.size();
+    trailing_metadata_ = FillMetadataArray(trailing_metadata);
+    send_status_available_ = true;
+    send_status_code_ = static_cast<grpc_status_code>(GetCanonicalCode(status));
+    send_status_details_ = status.error_message();
+  }
+
+ protected:
+  void AddOp(grpc_op* ops, size_t* nops) {
+    if (!send_status_available_) return;
+    grpc_op* op = &ops[(*nops)++];
+    op->op = GRPC_OP_SEND_STATUS_FROM_SERVER;
+    op->data.send_status_from_server.trailing_metadata_count =
+        trailing_metadata_count_;
+    op->data.send_status_from_server.trailing_metadata = trailing_metadata_;
+    op->data.send_status_from_server.status = send_status_code_;
+    status_details_slice_ = SliceReferencingString(send_status_details_);
+    op->data.send_status_from_server.status_details =
+        send_status_details_.empty() ? nullptr : &status_details_slice_;
+    op->flags = 0;
+    op->reserved = NULL;
+  }
+
+  void FinishOp(bool* status) {
+    if (!send_status_available_) return;
+    g_core_codegen_interface->gpr_free(trailing_metadata_);
+    send_status_available_ = false;
+  }
+
+ private:
+  bool send_status_available_;
+  grpc_status_code send_status_code_;
+  grpc::string send_status_details_;
+  size_t trailing_metadata_count_;
+  grpc_metadata* trailing_metadata_;
+  grpc_slice status_details_slice_;
 };
 
 class CallOpRecvInitialMetadata {
