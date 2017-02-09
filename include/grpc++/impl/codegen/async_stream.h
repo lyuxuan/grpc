@@ -101,6 +101,12 @@ class AsyncWriterInterface {
   /// \param[in] msg The message to be written.
   /// \param[in] tag The tag identifying the operation.
   virtual void Write(const W& msg, void* tag) = 0;
+
+  virtual void Write(const W& msg, WriteOptions options, void* tag) = 0;
+
+  void WriteLast(const w& msg, WriteOptions options, void* tag) {
+    Write(W & msg, options.set_last_message(), tag);
+  }
 };
 
 template <class R>
@@ -205,6 +211,16 @@ class ClientAsyncWriter final : public ClientAsyncWriterInterface<W> {
     call_.PerformOps(&write_ops_);
   }
 
+  void Write(const W& msg, WriteOptions options, void* tag) {
+    write_ops_.set_output_tag(tag);
+    if (options.is_last_message()) {
+      options.set_buffer_hint();
+      write_ops_.ClientSendClose();
+    }
+    GPR_CODEGEN_ASSERT(write_ops_.SendMessage(msg, options).ok());
+    call_.PerformOps(&write_ops_);
+  }
+
   void WritesDone(void* tag) override {
     writes_done_ops_.set_output_tag(tag);
     writes_done_ops_.ClientSendClose();
@@ -225,7 +241,7 @@ class ClientAsyncWriter final : public ClientAsyncWriterInterface<W> {
   Call call_;
   CallOpSet<CallOpSendInitialMetadata> init_ops_;
   CallOpSet<CallOpRecvInitialMetadata> meta_ops_;
-  CallOpSet<CallOpSendMessage> write_ops_;
+  CallOpSet<CallOpSendMessage, CallOpClientSendClose> write_ops_;
   CallOpSet<CallOpClientSendClose> writes_done_ops_;
   CallOpSet<CallOpRecvInitialMetadata, CallOpGenericRecvMessage,
             CallOpClientRecvStatus>
@@ -283,6 +299,16 @@ class ClientAsyncReaderWriter final
     call_.PerformOps(&write_ops_);
   }
 
+  void Write(const W& msg, WriteOptions options, void* tag) {
+    write_ops_.set_output_tag(tag);
+    if (options.is_last_message()) {
+      options.set_buffer_hint();
+      write_ops_.ClientSendClose();
+    }
+    GPR_CODEGEN_ASSERT(write_ops_.SendMessage(msg, options).ok());
+    call_.PerformOps(&write_ops_);
+  }
+
   void WritesDone(void* tag) override {
     writes_done_ops_.set_output_tag(tag);
     writes_done_ops_.ClientSendClose();
@@ -304,7 +330,7 @@ class ClientAsyncReaderWriter final
   CallOpSet<CallOpSendInitialMetadata> init_ops_;
   CallOpSet<CallOpRecvInitialMetadata> meta_ops_;
   CallOpSet<CallOpRecvInitialMetadata, CallOpRecvMessage<R>> read_ops_;
-  CallOpSet<CallOpSendMessage> write_ops_;
+  CallOpSet<CallOpSendMessage, CallOpClientSendClose> write_ops_;
   CallOpSet<CallOpClientSendClose> writes_done_ops_;
   CallOpSet<CallOpRecvInitialMetadata, CallOpClientRecvStatus> finish_ops_;
 };
@@ -395,6 +421,9 @@ class ServerAsyncWriterInterface : public ServerAsyncStreamingInterface,
                                    public AsyncWriterInterface<W> {
  public:
   virtual void Finish(const Status& status, void* tag) = 0;
+
+  virtual void WriteAndFinish(const W& msg, WriteOptions options,
+                              const Status& status void* tag) = 0;
 };
 
 template <class W>
@@ -431,6 +460,42 @@ class ServerAsyncWriter final : public ServerAsyncWriterInterface<W> {
     call_.PerformOps(&write_ops_);
   }
 
+  void Write(const W& msg, WriteOptions options, void* tag) {
+    write_ops_.set_output_tag(tag);
+    if (options.is_last_message()) {
+      options.set_buffer_hint();
+    }
+    if (!ctx_->sent_initial_metadata_) {
+      write_ops_.SendInitialMetadata(ctx_->initial_metadata_,
+                                     ctx_->initial_metadata_flags());
+      if (ctx_->compression_level_set()) {
+        write_ops_.set_compression_level(ctx_->compression_level());
+      }
+      ctx_->sent_initial_metadata_ = true;
+    }
+    GPR_CODEGEN_ASSERT(write_ops_.SendMessage(msg, options).ok());
+    call_.PerformOps(&write_ops_);
+  }
+
+  void WriteAndFinish(const W& msg, WriteOptions options,
+                      const Status& status void* tag) {
+    write_and_finish_ops_.set_output_tag(tag);
+    if (options.is_last_message()) {
+      options.set_buffer_hint();
+      finish_ops_.ServerSendStatus(ctx_->trailing_metadata_, status);
+    }
+    if (!ctx_->sent_initial_metadata_) {
+      write_and_finish_ops_.SendInitialMetadata(ctx_->initial_metadata_,
+                                                ctx_->initial_metadata_flags());
+      if (ctx_->compression_level_set()) {
+        write_and_finish_ops_.set_compression_level(ctx_->compression_level());
+      }
+      ctx_->sent_initial_metadata_ = true;
+    }
+    GPR_CODEGEN_ASSERT(write_and_finish_ops_.SendMessage(msg, options).ok());
+    call_.PerformOps(&write_and_finish_ops_);
+  }
+
   void Finish(const Status& status, void* tag) override {
     finish_ops_.set_output_tag(tag);
     if (!ctx_->sent_initial_metadata_) {
@@ -452,6 +517,9 @@ class ServerAsyncWriter final : public ServerAsyncWriterInterface<W> {
   ServerContext* ctx_;
   CallOpSet<CallOpSendInitialMetadata> meta_ops_;
   CallOpSet<CallOpSendInitialMetadata, CallOpSendMessage> write_ops_;
+  CallOpSet<CallOpSendInitialMetadata, CallOpSendMessage,
+            CallOpServerSendStatus>
+      write_and_finish_ops_;
   CallOpSet<CallOpSendInitialMetadata, CallOpServerSendStatus> finish_ops_;
 };
 
@@ -462,6 +530,8 @@ class ServerAsyncReaderWriterInterface : public ServerAsyncStreamingInterface,
                                          public AsyncReaderInterface<R> {
  public:
   virtual void Finish(const Status& status, void* tag) = 0;
+  virtual void WriteAndFinish(const W& msg, WriteOptions options,
+                              const Status& status void* tag) = 0;
 };
 
 template <class W, class R>
@@ -505,6 +575,42 @@ class ServerAsyncReaderWriter final
     call_.PerformOps(&write_ops_);
   }
 
+  void Write(const W& msg, WriteOptions options, void* tag) {
+    write_ops_.set_output_tag(tag);
+    if (options.is_last_message()) {
+      options.set_buffer_hint();
+    }
+    if (!ctx_->sent_initial_metadata_) {
+      write_ops_.SendInitialMetadata(ctx_->initial_metadata_,
+                                     ctx_->initial_metadata_flags());
+      if (ctx_->compression_level_set()) {
+        write_ops_.set_compression_level(ctx_->compression_level());
+      }
+      ctx_->sent_initial_metadata_ = true;
+    }
+    GPR_CODEGEN_ASSERT(write_ops_.SendMessage(msg, options).ok());
+    call_.PerformOps(&write_ops_);
+  }
+
+  void WriteAndFinish(const W& msg, WriteOptions options,
+                      const Status& status void* tag) {
+    write_and_finish_ops_.set_output_tag(tag);
+    if (!ctx_->sent_initial_metadata_) {
+      write_and_finish_ops_.SendInitialMetadata(ctx_->initial_metadata_,
+                                                ctx_->initial_metadata_flags());
+      if (ctx_->compression_level_set()) {
+        write_and_finish_ops_.set_compression_level(ctx_->compression_level());
+      }
+      ctx_->sent_initial_metadata_ = true;
+    }
+    if (options.is_last_message()) {
+      options.set_buffer_hint();
+      finish_ops_.ServerSendStatus(ctx_->trailing_metadata_, status);
+    }
+    GPR_CODEGEN_ASSERT(write_and_finish_ops_.SendMessage(msg, options).ok());
+    call_.PerformOps(&write_and_finish_ops_);
+  }
+
   void Finish(const Status& status, void* tag) override {
     finish_ops_.set_output_tag(tag);
     if (!ctx_->sent_initial_metadata_) {
@@ -529,6 +635,9 @@ class ServerAsyncReaderWriter final
   CallOpSet<CallOpSendInitialMetadata> meta_ops_;
   CallOpSet<CallOpRecvMessage<R>> read_ops_;
   CallOpSet<CallOpSendInitialMetadata, CallOpSendMessage> write_ops_;
+  CallOpSet<CallOpSendInitialMetadata, CallOpSendMessage,
+            CallOpServerSendStatus>
+      write_and_finish_ops_;
   CallOpSet<CallOpSendInitialMetadata, CallOpServerSendStatus> finish_ops_;
 };
 

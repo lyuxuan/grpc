@@ -107,7 +107,7 @@ class WriterInterface {
   /// \param options Options affecting the write operation.
   ///
   /// \return \a true on success, \a false when the stream has been closed.
-  virtual bool Write(const W& msg, const WriteOptions& options) = 0;
+  virtual bool Write(const W& msg, WriteOptions options) = 0;
 
   /// Blocking write \a msg to the stream with default options.
   /// This is thread-safe with respect to \a Read
@@ -116,6 +116,10 @@ class WriterInterface {
   ///
   /// \return \a true on success, \a false when the stream has been closed.
   inline bool Write(const W& msg) { return Write(msg, WriteOptions()); }
+
+  void WriteLast(const W& msg, WriteOptions options) {
+    Write(msg, options.set_last_message());
+  }
 };
 
 /// Client-side interface for streaming reads of message of type \a R.
@@ -220,6 +224,33 @@ class ClientWriter : public ClientWriterInterface<W> {
     cq_.Pluck(&ops);
   }
 
+  template <class R>
+  ClientWriter(ChannelInterface* channel, const RpcMethod& method,
+               ClientContext* context, WriteOptions options, R* response)
+      : context_(context), call_(channel->CreateCall(method, context, &cq_)) {
+    finish_ops_.RecvMessage(response);
+    finish_ops_.AllowNoMessage();
+
+    CallOpSet<CallOpSendInitialMetadata> ops;
+    ops.SendInitialMetadata(context->send_initial_metadata_,
+                            context->initial_metadata_flags());
+    call_.PerformOps(&ops);
+    cq_.Pluck(&ops);
+  }
+
+  template <class R>
+  ClientWriter(ChannelInterface* channel, const RpcMethod& method,
+               const W first_message, ClientContext* context, const R* response)
+      : context_(context), call_(channel->CreateCall(method, context, &cq_)) {
+    finish_ops_.RecvMessage(response);
+    finish_ops_.AllowNoMessage();
+
+    CallOpSet<CallOpSendInitialMetadata> ops;
+    ops.SendInitialMetadata(context->send_initial_metadata_,
+                            context->initial_metadata_flags());
+    call_.PerformOps(&ops);
+    cq_.Pluck(&ops);
+  }
   void WaitForInitialMetadata() {
     GPR_CODEGEN_ASSERT(!context_->initial_metadata_received_);
 
@@ -230,13 +261,24 @@ class ClientWriter : public ClientWriterInterface<W> {
   }
 
   using WriterInterface<W>::Write;
-  bool Write(const W& msg, const WriteOptions& options) override {
-    CallOpSet<CallOpSendMessage> ops;
-    if (!ops.SendMessage(msg, options).ok()) {
-      return false;
+  bool Write(const W& msg, WriteOptions options) override {
+    if (options.is_last_message()) {
+      options.set_buffer_hint();
+      CallOpSet<CallOpSendMessage, CallOpClientSendClose> ops;
+      if (!ops.SendMessage(msg, options).ok()) {
+        return false;
+      }
+      ops.ClientSendClose();
+      call_.PerformOps(&ops);
+      return cq_.Pluck(&ops);
+    } else {
+      CallOpSet<CallOpSendMessage> ops;
+      if (!ops.SendMessage(msg, options).ok()) {
+        return false;
+      }
+      call_.PerformOps(&ops);
+      return cq_.Pluck(&ops);
     }
-    call_.PerformOps(&ops);
-    return cq_.Pluck(&ops);
   }
 
   bool WritesDone() override {
@@ -325,11 +367,24 @@ class ClientReaderWriter final : public ClientReaderWriterInterface<W, R> {
   }
 
   using WriterInterface<W>::Write;
-  bool Write(const W& msg, const WriteOptions& options) override {
-    CallOpSet<CallOpSendMessage> ops;
-    if (!ops.SendMessage(msg, options).ok()) return false;
-    call_.PerformOps(&ops);
-    return cq_.Pluck(&ops);
+  bool Write(const W& msg, WriteOptions options) override {
+    if (options.is_last_message()) {
+      options.set_buffer_hint();
+      CallOpSet<CallOpSendMessage, CallOpClientSendClose> ops;
+      if (!ops.SendMessage(msg, options).ok()) {
+        return false;
+      }
+      ops.ClientSendClose();
+      call_.PerformOps(&ops);
+      return cq_.Pluck(&ops);
+    } else {
+      CallOpSet<CallOpSendMessage> ops;
+      if (!ops.SendMessage(msg, options).ok()) {
+        return false;
+      }
+      call_.PerformOps(&ops);
+      return cq_.Pluck(&ops);
+    }
   }
 
   bool WritesDone() override {
@@ -423,7 +478,10 @@ class ServerWriter final : public ServerWriterInterface<W> {
   }
 
   using WriterInterface<W>::Write;
-  bool Write(const W& msg, const WriteOptions& options) override {
+  bool Write(const W& msg, WriteOptions options) override {
+    if (options.is_last_message()) {
+      optons.set_buffer_hint();
+    }
     CallOpSet<CallOpSendInitialMetadata, CallOpSendMessage> ops;
     if (!ops.SendMessage(msg, options).ok()) {
       return false;
@@ -485,7 +543,10 @@ class ServerReaderWriterBody final {
     return call_->cq()->Pluck(&ops) && ops.got_message;
   }
 
-  bool Write(const W& msg, const WriteOptions& options) {
+  bool Write(const W& msg, WriteOptions options) {
+    if (options.is_last_message()) {
+      options.set_buffer_hint();
+    }
     CallOpSet<CallOpSendInitialMetadata, CallOpSendMessage> ops;
     if (!ops.SendMessage(msg, options).ok()) {
       return false;
@@ -523,7 +584,7 @@ class ServerReaderWriter final : public ServerReaderWriterInterface<W, R> {
   bool Read(R* msg) override { return body_.Read(msg); }
 
   using WriterInterface<W>::Write;
-  bool Write(const W& msg, const WriteOptions& options) override {
+  bool Write(const W& msg, WriteOptions options) override {
     return body_.Write(msg, options);
   }
 
@@ -562,8 +623,7 @@ class ServerUnaryStreamer final
   }
 
   using WriterInterface<ResponseType>::Write;
-  bool Write(const ResponseType& response,
-             const WriteOptions& options) override {
+  bool Write(const ResponseType& response, WriteOptions options) override {
     if (write_done_ || !read_done_) {
       return false;
     }
@@ -604,8 +664,7 @@ class ServerSplitStreamer final
   }
 
   using WriterInterface<ResponseType>::Write;
-  bool Write(const ResponseType& response,
-             const WriteOptions& options) override {
+  bool Write(const ResponseType& response, WriteOptions options) override {
     return read_done_ && body_.Write(response, options);
   }
 
