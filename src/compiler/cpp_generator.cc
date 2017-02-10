@@ -464,8 +464,8 @@ void PrintHeaderClientMethodInterfaces(
                      "virtual ::grpc::ClientAsyncReaderWriterInterface< "
                      "$Request$, $Response$>* "
                      "Async$Method$Raw(::grpc::ClientContext* context, "
-                     "::grpc::WriteOptions options, const $Request$& "
-                     "first_message, "
+                     "const $Request$& "
+                     "first_message, ::grpc::WriteOptions options,  "
                      "::grpc::CompletionQueue* cq, void* tag) = 0;\n");
     }
   }
