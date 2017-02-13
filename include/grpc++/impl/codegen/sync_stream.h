@@ -241,10 +241,10 @@ class ClientWriter : public ClientWriterInterface<W> {
 
   template <class R>
   ClientWriter(ChannelInterface* channel, const RpcMethod& method,
-               const W& first_message, WriteOptions options, ClientContext* context, const R* response)
+               ClientContext* context, const W& first_message, WriteOptions options, const R* response)
       : context_(context), call_(channel->CreateCall(method, context, &cq_)) {
     if (options.is_last_message()) {
-      WriteLast(first_message, options);
+      this->WriteLast(first_message, options);
     }
     else {
       //TODO: probably need some handling for writeoptions

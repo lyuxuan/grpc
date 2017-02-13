@@ -217,7 +217,7 @@ class ClientAsyncWriter final : public ClientAsyncWriterInterface<W> {
                     R* response, void* tag)
       : context_(context), call_(channel->CreateCall(method, context, cq)) {
     if (options.is_last_message()) {
-      WriteLast(first_message, options);
+      this->WriteLast(first_message, options, tag);
     }
     else {
     // TODO: what about unused first message and write options
