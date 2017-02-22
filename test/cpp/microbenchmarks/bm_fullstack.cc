@@ -1070,7 +1070,6 @@ static void BM_StreamingPingPongAsyncCoalescedMsgOptionConstructor(
   const int max_ping_pongs = state.range(1);
   // last_message_set == 1 means set_last_message() in WriteOptions
   const int last_message_set = state.range(2);
-  printf( "(%d %d %d)\n", msg_size, max_ping_pongs, last_message_set);
   EchoTestService::AsyncService service;
   std::unique_ptr<Fixture> fixture(new Fixture(&service));
   {
@@ -1103,12 +1102,12 @@ static void BM_StreamingPingPongAsyncCoalescedMsgOptionConstructor(
       }
       auto request_rw = stub->AsyncBidiStream(&cli_ctx, send_request, options,
                                               fixture->cq(), tag(1));
-
       // Establish async stream between client side and server side
       void* t;
       bool ok;
+
       // tag 2 and 3 is for server read first_message and write its reponse
-      int need_tags = (1 << 0) | (1 << 1) | (1 << 2) | (1 << 3);
+      int need_tags = (1 << 0) | (1 << 1) | (1 << 2) | (1 << 3)| (1<<4);
 
       while (need_tags) {
         GPR_ASSERT(fixture->cq()->Next(&t, &ok));
@@ -1122,6 +1121,7 @@ static void BM_StreamingPingPongAsyncCoalescedMsgOptionConstructor(
           response_rw.Read(&recv_request, tag(2));  // Start server recv
         }
         if (i == 2) {
+          request_rw->Read(&recv_response, tag(4));
           if (max_ping_pongs == 0 && last_message_set == 1) {
             response_rw.WriteAndFinish(send_response, WriteOptions(),
                                        Status::OK, tag(3));
@@ -1129,6 +1129,7 @@ static void BM_StreamingPingPongAsyncCoalescedMsgOptionConstructor(
             response_rw.Write(send_response, tag(3));
           }
         }
+
         GPR_ASSERT(need_tags & (1 << i));
         need_tags &= ~(1 << i);
       }
@@ -1138,15 +1139,15 @@ static void BM_StreamingPingPongAsyncCoalescedMsgOptionConstructor(
       while (ping_pong_cnt < max_ping_pongs) {
         if (ping_pong_cnt == max_ping_pongs - 1) {
           // coalesce last message written by client
-          request_rw->WriteLast(send_request, WriteOptions(), tag(4));
+          request_rw->WriteLast(send_request, WriteOptions(), tag(5));
         } else {
-          request_rw->Write(send_request, tag(4));  // Start client send
+          request_rw->Write(send_request, tag(5));  // Start client send
         }
 
-        response_rw.Read(&recv_request, tag(5));   // Start server recv
-        request_rw->Read(&recv_response, tag(6));  // Start client recv
+        response_rw.Read(&recv_request, tag(6));   // Start server recv
+        request_rw->Read(&recv_response, tag(7));  // Start client recv
 
-        need_tags = (1 << 4) | (1 << 5) | (1 << 6) | (1<<7);
+        need_tags = (1 << 5) | (1 << 6) | (1 << 7) | (1<<8);
         while (need_tags) {
           GPR_ASSERT(fixture->cq()->Next(&t, &ok));
           GPR_ASSERT(ok);
@@ -1156,9 +1157,9 @@ static void BM_StreamingPingPongAsyncCoalescedMsgOptionConstructor(
           if (i == 5) {
             if (ping_pong_cnt == max_ping_pongs - 1) {
               response_rw.WriteAndFinish(send_response, WriteOptions(),
-                                         Status::OK, tag(7));
+                                         Status::OK, tag(8));
             } else {
-              response_rw.Write(send_response, tag(7));
+              response_rw.Write(send_response, tag(8));
             }
           }
 
@@ -1171,26 +1172,24 @@ static void BM_StreamingPingPongAsyncCoalescedMsgOptionConstructor(
 
 // for case: 1 ping-pong and client only coalesce first_message and init_MD, we need client to send trailing_MD
       if (max_ping_pongs == 0 && last_message_set != 1) {
-        request_rw->WritesDone(tag(9));
-        response_rw.Finish(Status::OK, tag(8));
+        request_rw->WritesDone(tag(10));
+        response_rw.Finish(Status::OK, tag(9));
       }
 
       Status recv_status;
-      request_rw->Finish(&recv_status, tag(10));
+      request_rw->Finish(&recv_status, tag(11));
 
       if (max_ping_pongs == 0) {
         if (last_message_set == 1) {
-          need_tags = (1 << 10);
+          need_tags = (1 << 11);
         } else {
-          need_tags = (1 << 8) | (1 << 9) | (1 << 10);
+          need_tags = (1 << 9) | (1 << 10) | (1 << 11);
         }
       } else {
-        need_tags = (1 << 10);
+        need_tags = (1 << 11);
       }
 
-      printf("need_tags %d\n", need_tags);
       while (need_tags) {
-        printf("need_tags %d\n", need_tags);
 
         GPR_ASSERT(fixture->cq()->Next(&t, &ok));
         int i = (int)(intptr_t)t;
@@ -1529,24 +1528,22 @@ BENCHMARK_TEMPLATE(BM_StreamingPingPongAsyncCoalesced, InProcessCHTTP2,
 // with 0, 1 or 2 messages) 0 means default constructor
 static void StreamingPingPongAsyncCoalescedOptionOnlyConstructorArgs(
     benchmark::internal::Benchmark* b) {
-  // int msg_size = 0;
+  int msg_size = 0;
 
   b->Args({0, 0, 0});
+  b->Args({0, 0, 1});
+  b->Args({0, 0, 2});
 
-  // b->Args({0, 0, 0});
-  // b->Args({0, 0, 1});
-  // b->Args({0, 0, 2});
-  //
-  // for (msg_size = 0; msg_size <= 128 * 1024 * 1024;
-  //      msg_size == 0 ? msg_size++ : msg_size *= 8) {
-  //   b->Args({msg_size, 1, 0});
-  //   b->Args({msg_size, 2, 0});
-  //   b->Args({msg_size, 1, 1});
-  //   b->Args({msg_size, 2, 1});
-  //   b->Args({msg_size, 1, 2});
-  //   b->Args({msg_size, 2, 2});
-  //   b->Args({msg_size, 0, 3});
-  // }
+  for (msg_size = 0; msg_size <= 128 * 1024 * 1024;
+       msg_size == 0 ? msg_size++ : msg_size *= 8) {
+    b->Args({msg_size, 1, 0});
+    b->Args({msg_size, 2, 0});
+    b->Args({msg_size, 1, 1});
+    b->Args({msg_size, 2, 1});
+    b->Args({msg_size, 1, 2});
+    b->Args({msg_size, 2, 2});
+    b->Args({msg_size, 0, 3});
+  }
 }
 
 BENCHMARK_TEMPLATE(BM_StreamingPingPongAsyncCoalescedOptionOnlyConstructor,
@@ -1558,15 +1555,14 @@ BENCHMARK_TEMPLATE(BM_StreamingPingPongAsyncCoalescedOptionOnlyConstructor,
 // with 0, 1 or 2 messages) 0 means default constructor
 static void StreamingPingPongAsyncCoalescedMsgOptionConstructorArgs(
     benchmark::internal::Benchmark* b) {
-  // int msg_size = 0;
-  b->Args({0, 0, 1});
-
-  // for (msg_size = 0; msg_size <= 128 * 1024 * 1024;
-  //      msg_size == 0 ? msg_size++ : msg_size *= 8) {
-  //   b->Args({msg_size, 0, 0});
-  //   b->Args({msg_size, 1, 0});
-  //   b->Args({msg_size, 0, 1});
-  // }
+  int msg_size = 0;
+  // b->Args({262144,0,0});
+  for (msg_size = 0; msg_size <= 128 * 1024 * 1024;
+       msg_size == 0 ? msg_size++ : msg_size *= 8) {
+    b->Args({msg_size, 0, 0});
+    b->Args({msg_size, 1, 0});
+    b->Args({msg_size, 0, 1});
+  }
 }
 
 BENCHMARK_TEMPLATE(BM_StreamingPingPongAsyncCoalescedMsgOptionConstructor,

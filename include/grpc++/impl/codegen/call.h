@@ -141,6 +141,20 @@ class WriteOptions {
   /// \sa GRPC_WRITE_BUFFER_HINT
   inline bool get_buffer_hint() const { return GetBit(GRPC_WRITE_BUFFER_HINT); }
 
+  /// corked bit: aliases set_buffer_hint currently, with the intent that
+  /// set_buffer_hint will be removed in the future
+  inline WriteOptions& set_corked() {
+    SetBit(GRPC_WRITE_BUFFER_HINT);
+    return *this;    
+  }
+
+  inline WriteOptions& clear_corked() {
+    ClearBit(GRPC_WRITE_BUFFER_HINT);
+    return *this;
+  }
+
+  inline bool is_corked() const { return GetBit(GRPC_WRITE_BUFFER_HINT); }
+
   /// last-message bit: indicates this is the last message in a stream
   /// client-side:  makes Write the equivalent of performing Write, WritesDone
   /// in

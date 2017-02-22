@@ -281,6 +281,9 @@ class ClientContext {
   /// \param algorithm The compression algorithm used for the client call.
   void set_compression_algorithm(grpc_compression_algorithm algorithm);
 
+  /// Flag that metadata should be corked (and not sent until the first message is sent)
+  void sent_initial_metadata_corked(bool corked);
+
   /// Return the peer uri in a string.
   ///
   /// \warning This value is never authenticated or subject to any security
@@ -384,6 +387,7 @@ class ClientContext {
   PropagationOptions propagation_options_;
 
   grpc_compression_algorithm compression_algorithm_;
+  bool corked_;
 };
 
 }  // namespace grpc

@@ -429,7 +429,6 @@ class ClientAsyncReaderWriter final
 
   void Finish(Status* status, void* tag) override {
     finish_ops_.set_output_tag(tag);
-    printf ("initial metadata received (clinet) %d\n", context_->initial_metadata_received_);
     if (!context_->initial_metadata_received_) {
       finish_ops_.RecvInitialMetadata(context_);
     }
@@ -729,7 +728,6 @@ class ServerAsyncReaderWriter final
 
   void Finish(const Status& status, void* tag) override {
     finish_ops_.set_output_tag(tag);
-    printf("send initial metadata (server): %d\n", ctx_->sent_initial_metadata_);
     if (!ctx_->sent_initial_metadata_) {
       finish_ops_.SendInitialMetadata(ctx_->initial_metadata_,
                                       ctx_->initial_metadata_flags());
