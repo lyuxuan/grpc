@@ -962,10 +962,8 @@ static void BM_StreamingPingPongAsyncCoalesced(benchmark::State& state) {
               }
               else {
                 response_rw.WriteLast(send_response, WriteOptions(), tag(3));
-                // we currently don't buffer up the initial metadata with msg in WriteLast
-                if (max_ping_pongs != 1) {
-                  need_tags &= ~(1<<2);
-                }
+                need_tags &= ~(1<<2);
+                need_tags &= ~(1<<3);
               }
             } else {
               response_rw.Write(send_response, tag(3));
@@ -982,9 +980,6 @@ static void BM_StreamingPingPongAsyncCoalesced(benchmark::State& state) {
       }
       else {
         if (write_and_finish != 1) {
-          if (max_ping_pongs == 1) {
-            request_rw->Read(&recv_response, tag(7));
-          }
           response_rw.Finish(Status::OK, tag(5));
         }
       }
@@ -996,12 +991,7 @@ static void BM_StreamingPingPongAsyncCoalesced(benchmark::State& state) {
         need_tags = (1 << 4) | (1 << 5) | (1 << 6);
       } else {
         if (write_and_finish != 1) {
-          if (max_ping_pongs != 1) {
-            need_tags = (1<<2)|(1<<5) | (1<<6);
-          }
-          else {
-            need_tags = (1<<5) | (1<<6) | (1<<7);
-          }
+          need_tags = (1<<2)|(1<<3)|(1<<5) | (1<<6);
         }
         else {
           need_tags = (1 << 6);
