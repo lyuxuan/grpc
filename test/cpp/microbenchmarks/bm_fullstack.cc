@@ -111,9 +111,10 @@ class BaseFixture {
     std::ostringstream out;
     this->AddToLabel(out, s);
 #ifdef GPR_LOW_LEVEL_COUNTERS
-    out << " locks/iter:" << ((double)(gpr_atm_no_barrier_load(&gpr_mu_locks) -
-                                       mu_locks_at_start_) /
-                              (double)s.iterations())
+    out << " locks/iter:"
+        << ((double)(gpr_atm_no_barrier_load(&gpr_mu_locks) -
+                     mu_locks_at_start_) /
+            (double)s.iterations())
         << " atm_cas/iter:"
         << ((double)(gpr_atm_no_barrier_load(&gpr_counter_atm_cas) -
                      atm_cas_at_start_) /
@@ -763,10 +764,140 @@ static void BM_StreamingPingPongMsgs(benchmark::State& state) {
 //      Note: One ping-pong means two messages (one from client to server and
 //      the other from server to client):
 template <class Fixture, class ClientContextMutator, class ServerContextMutator>
-static void BM_StreamingPingPongAsyncCoalesced(benchmark::State& state) {
+static void BM_StreamingPingPongCorkedApi(benchmark::State& state) {
   const int msg_size = state.range(0);
   const int max_ping_pongs = state.range(1);
 
+  EchoTestService::AsyncService service;
+  std::unique_ptr<Fixture> fixture(new Fixture(&service));
+  {
+    EchoResponse send_response;
+    EchoResponse recv_response;
+    EchoRequest send_request;
+    EchoRequest recv_request;
+
+    if (msg_size > 0) {
+      send_request.set_message(std::string(msg_size, 'a'));
+      send_response.set_message(std::string(msg_size, 'b'));
+    }
+
+    std::unique_ptr<EchoTestService::Stub> stub(
+        EchoTestService::NewStub(fixture->channel()));
+
+    while (state.KeepRunning()) {
+      ServerContext svr_ctx;
+      ServerContextMutator svr_ctx_mut(&svr_ctx);
+      ServerAsyncReaderWriter<EchoResponse, EchoRequest> response_rw(&svr_ctx);
+      service.RequestBidiStream(&svr_ctx, &response_rw, fixture->cq(),
+                                fixture->cq(), tag(0));
+
+      ClientContext cli_ctx;
+      ClientContextMutator cli_ctx_mut(&cli_ctx);
+      cli_ctx.sent_initial_metadata_corked(true);
+      auto request_rw = stub->AsyncBidiStream(&cli_ctx, fixture->cq(), tag(1));
+
+      // Establish async stream between client side and server side
+      void* t;
+      bool ok;
+      int need_tags;
+
+      // Send 'max_ping_pongs' number of ping pong messages
+      int ping_pong_cnt = 0;
+      while (ping_pong_cnt < max_ping_pongs) {
+        if (ping_pong_cnt == max_ping_pongs - 1) {
+          request_rw->WriteLast(send_request, WriteOptions(), tag(2));
+        } else {
+          request_rw->Write(send_request, tag(2));  // Start client send
+        }
+
+        need_tags = (1 << 2) | (1 << 3) | (1 << 4) | (1 << 5);
+
+        if (ping_pong_cnt == 0) {
+          // initialize the server call structure (call_hook, etc.) when client
+          // init metadata is coalesced
+          GPR_ASSERT(fixture->cq()->Next(&t, &ok));
+          while ((int)(intptr_t)t != 0) {
+            // In some wired cases tag:2 comes before tag:0 (write tag comes out
+            // first), this while loop is to make sure when get tag 0.
+            int i = (int)(intptr_t)t;
+            GPR_ASSERT(need_tags & (1 << i));
+            need_tags &= ~(1 << i);
+            GPR_ASSERT(fixture->cq()->Next(&t, &ok));
+          }
+        }
+        response_rw.Read(&recv_request, tag(3));   // Start server recv
+        request_rw->Read(&recv_response, tag(4));  // Start client recv
+
+        while (need_tags) {
+          GPR_ASSERT(fixture->cq()->Next(&t, &ok));
+          GPR_ASSERT(ok);
+          int i = (int)(intptr_t)t;
+
+          // If server recv is complete, start the server send operation
+          if (i == 3) {
+            if (ping_pong_cnt == max_ping_pongs - 1) {
+              response_rw.WriteAndFinish(send_response, WriteOptions(),
+                                         Status::OK, tag(5));
+            } else {
+              response_rw.Write(send_response, tag(5));
+            }
+          }
+
+          GPR_ASSERT(need_tags & (1 << i));
+          need_tags &= ~(1 << i);
+        }
+
+        ping_pong_cnt++;
+      }
+
+      if (max_ping_pongs == 0) {
+        request_rw->WritesDone(tag(6));
+        // have to let client initial metadata be received by server and
+        // initialize server call data structure(call_hook, etc.) since
+        // set_buffer_hint() buffers up initial metadata
+        GPR_ASSERT(fixture->cq()->Next(&t, &ok));
+        GPR_ASSERT((int)(intptr_t)t == 0);
+        response_rw.Finish(Status::OK, tag(7));
+      }
+      Status recv_status;
+      request_rw->Finish(&recv_status, tag(8));
+
+      if (max_ping_pongs == 0) {
+        need_tags = (1 << 6) | (1 << 7) | (1 << 8);
+      } else {
+        need_tags = (1 << 8);
+      }
+
+      while (need_tags) {
+        GPR_ASSERT(fixture->cq()->Next(&t, &ok));
+        int i = (int)(intptr_t)t;
+        GPR_ASSERT(need_tags & (1 << i));
+        need_tags &= ~(1 << i);
+      }
+
+      GPR_ASSERT(recv_status.ok());
+    }
+  }
+
+  fixture->Finish(state);
+  fixture.reset();
+  state.SetBytesProcessed(msg_size * state.iterations() * max_ping_pongs * 2);
+}
+
+// Repeatedly makes Streaming Bidi calls (exchanging a configurable number of
+// messages in each call) in a loop on a single channel
+//
+//  First parmeter (i.e state.range(0)):  Message size (in bytes) to use
+//  Second parameter (i.e state.range(1)): Number of ping pong messages.
+//      Note: One ping-pong means two messages (one from client to server and
+//      the other from server to client):
+template <class Fixture, class ClientContextMutator, class ServerContextMutator>
+static void BM_StreamingPingPongAsyncCoalesced(benchmark::State& state) {
+  const int msg_size = state.range(0);
+  const int max_ping_pongs = state.range(1);
+  // to verify: for server, WriteLast + Finish == WriteAndFinish
+  // 1 for WriteAndFinish, and otherwise WriteLast + Finish
+  const int write_and_finish = state.range(2);
   EchoTestService::AsyncService service;
   std::unique_ptr<Fixture> fixture(new Fixture(&service));
   {
@@ -822,375 +953,62 @@ static void BM_StreamingPingPongAsyncCoalesced(benchmark::State& state) {
           GPR_ASSERT(fixture->cq()->Next(&t, &ok));
           GPR_ASSERT(ok);
           int i = (int)(intptr_t)t;
-
           // If server recv is complete, start the server send operation
           if (i == 1) {
             if (ping_pong_cnt == max_ping_pongs - 1) {
-              response_rw.WriteAndFinish(send_response, WriteOptions(),
-                                         Status::OK, tag(3));
+              if (write_and_finish == 1) {
+                response_rw.WriteAndFinish(send_response, WriteOptions(),
+                                           Status::OK, tag(3));
+              }
+              else {
+                response_rw.WriteLast(send_response, WriteOptions(), tag(3));
+                // we currently don't buffer up the initial metadata with msg in WriteLast
+                if (max_ping_pongs != 1) {
+                  need_tags &= ~(1<<2);
+                }
+              }
             } else {
               response_rw.Write(send_response, tag(3));
             }
           }
-
           GPR_ASSERT(need_tags & (1 << i));
           need_tags &= ~(1 << i);
         }
-
         ping_pong_cnt++;
       }
-
       if (max_ping_pongs == 0) {
-        request_rw->WritesDone(tag(0));
-        response_rw.Finish(Status::OK, tag(1));
+        request_rw->WritesDone(tag(4));
+        response_rw.Finish(Status::OK, tag(5));
       }
-      Status recv_status;
-      request_rw->Finish(&recv_status, tag(2));
-
-      if (max_ping_pongs == 0) {
-        need_tags = (1 << 0) | (1 << 1) | (1 << 2);
-      } else {
-        need_tags = (1 << 2);
-      }
-
-      while (need_tags) {
-        GPR_ASSERT(fixture->cq()->Next(&t, &ok));
-        int i = (int)(intptr_t)t;
-        GPR_ASSERT(need_tags & (1 << i));
-        need_tags &= ~(1 << i);
-      }
-
-      GPR_ASSERT(recv_status.ok());
-    }
-  }
-
-  fixture->Finish(state);
-  fixture.reset();
-  state.SetBytesProcessed(msg_size * state.iterations() * max_ping_pongs * 2);
-}
-
-// Repeatedly makes Streaming Bidi calls (exchanging a configurable number of
-// messages in each call) in a loop on a single channel
-//
-//  First parmeter (i.e state.range(0)):  Message size (in bytes) to use
-//  Second parameter (i.e state.range(1)): Number of ping pong messages.
-//      Note: One ping-pong means two messages (one from client to server and
-//      the other from server to client):
-// benchmarking ClientAsyncReaderWriter construtor with WriteOptions only
-template <class Fixture, class ClientContextMutator, class ServerContextMutator>
-static void BM_StreamingPingPongAsyncCoalescedOptionOnlyConstructor(
-    benchmark::State& state) {
-  const int msg_size = state.range(0);
-  const int max_ping_pongs = state.range(1);
-  const int which_write_options = state.range(2);
-  // printf("%d %d %d\n", msg_size, max_ping_pongs, which_write_options);
-  EchoTestService::AsyncService service;
-  std::unique_ptr<Fixture> fixture(new Fixture(&service));
-  {
-    EchoResponse send_response;
-    EchoResponse recv_response;
-    EchoRequest send_request;
-    EchoRequest recv_request;
-
-    if (msg_size > 0) {
-      send_request.set_message(std::string(msg_size, 'a'));
-      send_response.set_message(std::string(msg_size, 'b'));
-    }
-
-    std::unique_ptr<EchoTestService::Stub> stub(
-        EchoTestService::NewStub(fixture->channel()));
-
-    while (state.KeepRunning()) {
-      ServerContext svr_ctx;
-      ServerContextMutator svr_ctx_mut(&svr_ctx);
-      ServerAsyncReaderWriter<EchoResponse, EchoRequest> response_rw(&svr_ctx);
-      service.RequestBidiStream(&svr_ctx, &response_rw, fixture->cq(),
-                                fixture->cq(), tag(0));
-
-      ClientContext cli_ctx;
-      ClientContextMutator cli_ctx_mut(&cli_ctx);
-      WriteOptions options = WriteOptions();
-
-      switch (which_write_options) {
-        case 1:
-          // set_no_compression()
-          options.set_no_compression();
-          break;
-        case 2:
-          // set_buffer_hint()
-          options.set_buffer_hint();
-          break;
-        case 3:
-          // set_last_message()
-          options.set_last_message();
-          break;
-        default:
-          // empty options
-          break;
-      }
-      auto request_rw =
-          stub->AsyncBidiStream(&cli_ctx, options, fixture->cq(), tag(1));
-
-      // Establish async stream between client side and server side
-      void* t;
-      bool ok;
-      int need_tags;
-      // for set_buffer_hint() case, nothing happens until client write the
-      // first message/trailing MD since we are coalescing init MD. Thus, we
-      // don't need to check tags here as nothing will come out.
-      if (which_write_options == 2) {
-        need_tags = 0;
-      } else {
-        need_tags = (1 << 0) | (1 << 1);
-      }
-
-      while (need_tags) {
-        GPR_ASSERT(fixture->cq()->Next(&t, &ok));
-        GPR_ASSERT(ok);
-        int i = (int)(intptr_t)t;
-
-        GPR_ASSERT(need_tags & (1 << i));
-        need_tags &= ~(1 << i);
-      }
-
-      // Send 'max_ping_pongs' number of ping pong messages
-      int ping_pong_cnt = 0;
-      while (ping_pong_cnt < max_ping_pongs) {
-        if (ping_pong_cnt == max_ping_pongs - 1) {
-          // coalesce last message written by client
-          request_rw->WriteLast(send_request, WriteOptions(), tag(2));
-        } else {
-          request_rw->Write(send_request, tag(2));  // Start client send
-        }
-
-        need_tags = (1 << 2) | (1 << 3) | (1 << 4) | (1 << 5);
-
-        if (ping_pong_cnt == 0 && which_write_options == 2) {
-          // initialize the server call structure (call_hook, etc.) when client
-          // init metadata is coalesced
-          GPR_ASSERT(fixture->cq()->Next(&t, &ok));
-          while ((int)(intptr_t)t != 0) {
-            // In some wired cases tag:2 comes before tag:0 (write tag comes out
-            // first)
-            int i = (int)(intptr_t)t;
-            GPR_ASSERT(need_tags & (1 << i));
-            need_tags &= ~(1 << i);
-            GPR_ASSERT(fixture->cq()->Next(&t, &ok));
+      else {
+        if (write_and_finish != 1) {
+          if (max_ping_pongs == 1) {
+            request_rw->Read(&recv_response, tag(7));
           }
-        }
-
-        response_rw.Read(&recv_request, tag(3));   // Start server recv
-        request_rw->Read(&recv_response, tag(4));  // Start client recv
-
-        // need_tags = (1 << 2) | (1 << 3) | (1 << 4) | (1 << 5);
-
-        while (need_tags) {
-          GPR_ASSERT(fixture->cq()->Next(&t, &ok));
-          GPR_ASSERT(ok);
-          int i = (int)(intptr_t)t;
-
-          // If server recv is complete, start the server send operation
-          if (i == 3) {
-            if (ping_pong_cnt == max_ping_pongs - 1) {
-              response_rw.WriteAndFinish(send_response, WriteOptions(),
-                                         Status::OK, tag(5));
-            } else {
-              response_rw.Write(send_response, tag(5));
-            }
-          }
-
-          GPR_ASSERT(need_tags & (1 << i));
-          need_tags &= ~(1 << i);
-        }
-
-        ping_pong_cnt++;
-      }
-
-      // No write happens except in constructor
-      if (max_ping_pongs == 0) {
-        if (which_write_options == 3) {
-          response_rw.Finish(Status::OK, tag(6));
-        } else {
-          request_rw->WritesDone(tag(7));
-          if (which_write_options == 2) {
-            // have to let client initial metadata be received by server and
-            // initialize server call data structure(call_hook, etc.) since
-            // set_buffer_hint() buffers up initial metadata
-            GPR_ASSERT(fixture->cq()->Next(&t, &ok));
-            GPR_ASSERT((int)(intptr_t)t == 0);
-          }
-          response_rw.Finish(Status::OK, tag(6));
+          response_rw.Finish(Status::OK, tag(5));
         }
       }
 
       Status recv_status;
-      request_rw->Finish(&recv_status, tag(8));
+      request_rw->Finish(&recv_status, tag(6));
 
       if (max_ping_pongs == 0) {
-        if (which_write_options != 3) {
-          need_tags = (1 << 6) | (1 << 7) | (1 << 8);
-        } else {
-          // Do not have to wait for writesDone tag, since this operation is
-          // coalesced
-          need_tags = (1 << 6) | (1 << 8);
-        }
+        need_tags = (1 << 4) | (1 << 5) | (1 << 6);
       } else {
-        need_tags = (1 << 8);
-      }
-
-      while (need_tags) {
-        GPR_ASSERT(fixture->cq()->Next(&t, &ok));
-        int i = (int)(intptr_t)t;
-        GPR_ASSERT(need_tags & (1 << i));
-        need_tags &= ~(1 << i);
-      }
-
-      GPR_ASSERT(recv_status.ok());
-    }
-  }
-
-  fixture->Finish(state);
-  fixture.reset();
-  state.SetBytesProcessed(msg_size * state.iterations() * max_ping_pongs * 2);
-}
-
-// Repeatedly makes Streaming Bidi calls (exchanging a configurable number of
-// messages in each call) in a loop on a single channel
-//
-//  First parmeter (i.e state.range(0)):  Message size (in bytes) to use
-//  Second parameter (i.e state.range(1)): Number of ping pong messages.
-//      Note: One ping-pong means two messages (one from client to server and
-//      the other from server to client):
-// benchmarking ClientAsyncReaderWriter construtor with first_message and
-// WriteOptions
-template <class Fixture, class ClientContextMutator, class ServerContextMutator>
-static void BM_StreamingPingPongAsyncCoalescedMsgOptionConstructor(
-    benchmark::State& state) {
-  const int msg_size = state.range(0);
-  const int max_ping_pongs = state.range(1);
-  // last_message_set == 1 means set_last_message() in WriteOptions
-  const int last_message_set = state.range(2);
-  EchoTestService::AsyncService service;
-  std::unique_ptr<Fixture> fixture(new Fixture(&service));
-  {
-    EchoResponse send_response;
-    EchoResponse recv_response;
-    EchoRequest send_request;
-    EchoRequest recv_request;
-
-    if (msg_size > 0) {
-      send_request.set_message(std::string(msg_size, 'a'));
-      send_response.set_message(std::string(msg_size, 'b'));
-    }
-
-    std::unique_ptr<EchoTestService::Stub> stub(
-        EchoTestService::NewStub(fixture->channel()));
-
-    while (state.KeepRunning()) {
-      ServerContext svr_ctx;
-      ServerContextMutator svr_ctx_mut(&svr_ctx);
-      ServerAsyncReaderWriter<EchoResponse, EchoRequest> response_rw(&svr_ctx);
-      service.RequestBidiStream(&svr_ctx, &response_rw, fixture->cq(),
-                                fixture->cq(), tag(0));
-
-      ClientContext cli_ctx;
-      ClientContextMutator cli_ctx_mut(&cli_ctx);
-      WriteOptions options = WriteOptions();
-
-      if (last_message_set == 1) {
-        options.set_last_message();
-      }
-      auto request_rw = stub->AsyncBidiStream(&cli_ctx, send_request, options,
-                                              fixture->cq(), tag(1));
-      // Establish async stream between client side and server side
-      void* t;
-      bool ok;
-
-      // tag 2 and 3 is for server read first_message and write its reponse
-      int need_tags = (1 << 0) | (1 << 1) | (1 << 2) | (1 << 3)| (1<<4);
-
-      while (need_tags) {
-        GPR_ASSERT(fixture->cq()->Next(&t, &ok));
-        GPR_ASSERT(ok);
-        int i = (int)(intptr_t)t;
-        if (i == 0) {
-          // we need this server read to be queued up due to flow control. If we
-          // don't queue up the read operation, client write of large
-          // first_message
-          // (>flow control window) will never finish.
-          response_rw.Read(&recv_request, tag(2));  // Start server recv
-        }
-        if (i == 2) {
-          request_rw->Read(&recv_response, tag(4));
-          if (max_ping_pongs == 0 && last_message_set == 1) {
-            response_rw.WriteAndFinish(send_response, WriteOptions(),
-                                       Status::OK, tag(3));
-          } else {
-            response_rw.Write(send_response, tag(3));
+        if (write_and_finish != 1) {
+          if (max_ping_pongs != 1) {
+            need_tags = (1<<2)|(1<<5) | (1<<6);
+          }
+          else {
+            need_tags = (1<<5) | (1<<6) | (1<<7);
           }
         }
-
-        GPR_ASSERT(need_tags & (1 << i));
-        need_tags &= ~(1 << i);
-      }
-
-      // Send 'max_ping_pongs' number of ping pong messages
-      int ping_pong_cnt = 0;
-      while (ping_pong_cnt < max_ping_pongs) {
-        if (ping_pong_cnt == max_ping_pongs - 1) {
-          // coalesce last message written by client
-          request_rw->WriteLast(send_request, WriteOptions(), tag(5));
-        } else {
-          request_rw->Write(send_request, tag(5));  // Start client send
+        else {
+          need_tags = (1 << 6);
         }
-
-        response_rw.Read(&recv_request, tag(6));   // Start server recv
-        request_rw->Read(&recv_response, tag(7));  // Start client recv
-
-        need_tags = (1 << 5) | (1 << 6) | (1 << 7) | (1<<8);
-        while (need_tags) {
-          GPR_ASSERT(fixture->cq()->Next(&t, &ok));
-          GPR_ASSERT(ok);
-          int i = (int)(intptr_t)t;
-
-          // If server recv is complete, start the server send operation
-          if (i == 5) {
-            if (ping_pong_cnt == max_ping_pongs - 1) {
-              response_rw.WriteAndFinish(send_response, WriteOptions(),
-                                         Status::OK, tag(8));
-            } else {
-              response_rw.Write(send_response, tag(8));
-            }
-          }
-
-          GPR_ASSERT(need_tags & (1 << i));
-          need_tags &= ~(1 << i);
-        }
-
-        ping_pong_cnt++;
-      }
-
-// for case: 1 ping-pong and client only coalesce first_message and init_MD, we need client to send trailing_MD
-      if (max_ping_pongs == 0 && last_message_set != 1) {
-        request_rw->WritesDone(tag(10));
-        response_rw.Finish(Status::OK, tag(9));
-      }
-
-      Status recv_status;
-      request_rw->Finish(&recv_status, tag(11));
-
-      if (max_ping_pongs == 0) {
-        if (last_message_set == 1) {
-          need_tags = (1 << 11);
-        } else {
-          need_tags = (1 << 9) | (1 << 10) | (1 << 11);
-        }
-      } else {
-        need_tags = (1 << 11);
       }
 
       while (need_tags) {
-
         GPR_ASSERT(fixture->cq()->Next(&t, &ok));
         int i = (int)(intptr_t)t;
         GPR_ASSERT(need_tags & (1 << i));
@@ -1325,8 +1143,9 @@ static void BM_PumpStreamServerToClient(benchmark::State& state) {
 static void TrickleCQNext(TrickledCHTTP2* fixture, void** t, bool* ok) {
   while (true) {
     switch (fixture->cq()->AsyncNext(
-        t, ok, gpr_time_add(gpr_now(GPR_CLOCK_MONOTONIC),
-                            gpr_time_from_micros(100, GPR_TIMESPAN)))) {
+        t, ok,
+        gpr_time_add(gpr_now(GPR_CLOCK_MONOTONIC),
+                     gpr_time_from_micros(100, GPR_TIMESPAN)))) {
       case CompletionQueue::TIMEOUT:
         fixture->Step();
         break;
@@ -1519,55 +1338,47 @@ BENCHMARK_TEMPLATE(BM_StreamingPingPong, InProcessCHTTP2, NoOpMutator,
 BENCHMARK_TEMPLATE(BM_StreamingPingPong, TCP, NoOpMutator, NoOpMutator)
     ->Apply(StreamingPingPongArgs);
 
-BENCHMARK_TEMPLATE(BM_StreamingPingPongAsyncCoalesced, InProcessCHTTP2,
-                   NoOpMutator, NoOpMutator)
-    ->Apply(StreamingPingPongArgs);
-
-// Generate Args for StreamingPingPongAsyncCoalescedOptionOnlyConstructor
-// benchmarks. Currently generates args for only "small streams" (i.e streams
-// with 0, 1 or 2 messages) 0 means default constructor
-static void StreamingPingPongAsyncCoalescedOptionOnlyConstructorArgs(
-    benchmark::internal::Benchmark* b) {
+// Generate Args for StreamingPingPong benchmarks. Currently generates args for
+// only "small streams" (i.e streams with 0, 1 or 2 messages)
+static void StreamingPingPongAsyncCoalescedArgs(benchmark::internal::Benchmark* b) {
   int msg_size = 0;
 
-  b->Args({0, 0, 0});
-  b->Args({0, 0, 1});
-  b->Args({0, 0, 2});
+  b->Args({0, 0, 0});  // spl case: 0 ping-pong msgs (msg_size doesn't matter here)
+  b->Args({0, 0, 1});  // spl case: 0 ping-pong msgs (msg_size doesn't matter here)
 
-  for (msg_size = 0; msg_size <= 128 * 1024 * 1024;
+  for (msg_size = 0; msg_size <= 32 * 1024;
        msg_size == 0 ? msg_size++ : msg_size *= 8) {
     b->Args({msg_size, 1, 0});
     b->Args({msg_size, 2, 0});
     b->Args({msg_size, 1, 1});
     b->Args({msg_size, 2, 1});
-    b->Args({msg_size, 1, 2});
-    b->Args({msg_size, 2, 2});
-    b->Args({msg_size, 0, 3});
   }
 }
 
-BENCHMARK_TEMPLATE(BM_StreamingPingPongAsyncCoalescedOptionOnlyConstructor,
-                   InProcessCHTTP2, NoOpMutator, NoOpMutator)
-    ->Apply(StreamingPingPongAsyncCoalescedOptionOnlyConstructorArgs);
+BENCHMARK_TEMPLATE(BM_StreamingPingPongAsyncCoalesced, InProcessCHTTP2,
+                   NoOpMutator, NoOpMutator)
+    ->Apply(StreamingPingPongAsyncCoalescedArgs);
 
-// Generate Args for StreamingPingPongAsyncCoalescedOptionOnlyConstructor
-// benchmarks. Currently generates args for only "small streams" (i.e streams
-// with 0, 1 or 2 messages) 0 means default constructor
-static void StreamingPingPongAsyncCoalescedMsgOptionConstructorArgs(
-    benchmark::internal::Benchmark* b) {
+// Generate Args for StreamingPingPong benchmarks. Currently generates args for
+// only "small streams" (i.e streams with 0, 1 or 2 messages)
+static void StreamingPingPongCorkedApiArgs(benchmark::internal::Benchmark* b) {
   int msg_size = 0;
-  // b->Args({262144,0,0});
-  for (msg_size = 0; msg_size <= 128 * 1024 * 1024;
+
+  b->Args({0, 0});  // spl case: 0 ping-pong msgs (msg_size doesn't matter here)
+
+  for (msg_size = 0; msg_size <= 32 * 1024;
        msg_size == 0 ? msg_size++ : msg_size *= 8) {
-    b->Args({msg_size, 0, 0});
-    b->Args({msg_size, 1, 0});
-    b->Args({msg_size, 0, 1});
+    b->Args({msg_size, 1});
+    b->Args({msg_size, 2});
   }
 }
 
-BENCHMARK_TEMPLATE(BM_StreamingPingPongAsyncCoalescedMsgOptionConstructor,
-                   InProcessCHTTP2, NoOpMutator, NoOpMutator)
-    ->Apply(StreamingPingPongAsyncCoalescedMsgOptionConstructorArgs);
+BENCHMARK_TEMPLATE(BM_StreamingPingPongCorkedApi, InProcessCHTTP2, NoOpMutator,
+                   NoOpMutator)
+    ->Apply(StreamingPingPongCorkedApiArgs);
+// BENCHMARK_TEMPLATE(BM_StreamingPingPongCorkedApi, TCP, NoOpMutator,
+// NoOpMutator)
+//     ->Apply(StreamingPingPongCorkedApiArgs);
 
 BENCHMARK_TEMPLATE(BM_StreamingPingPongMsgs, InProcessCHTTP2, NoOpMutator,
                    NoOpMutator)

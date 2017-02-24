@@ -67,8 +67,8 @@ ClientContext::ClientContext()
       call_canceled_(false),
       deadline_(gpr_inf_future(GPR_CLOCK_REALTIME)),
       census_context_(nullptr),
-      propagate_from_call_(nullptr)
-      corked_(false) {
+      propagate_from_call_(nullptr),
+      initial_metadata_corked_(false) {
   g_client_callbacks->DefaultConstructor(this);
 }
 
@@ -120,7 +120,7 @@ void ClientContext::set_compression_algorithm(
 }
 
 void ClientContext::sent_initial_metadata_corked(bool corked) {
-  corked_ = corked;
+  initial_metadata_corked_ = corked;
 }
 
 void ClientContext::TryCancel() {

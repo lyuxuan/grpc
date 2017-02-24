@@ -48,6 +48,7 @@ const int kNumResponseStreamsMsgs = 3;
 const char* const kServerCancelAfterReads = "cancel_after_reads";
 const char* const kServerTryCancelRequest = "server_try_cancel";
 const char* const kDebugInfoTrailerKey = "debug-info-bin";
+const char* const kServerFinishAfterReads = "finish_after_reads";
 
 typedef enum {
   DO_NOT_CANCEL = 0,

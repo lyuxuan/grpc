@@ -202,32 +202,6 @@ void PrintHeaderClientMethodInterfaces(
       printer->Print("}\n");
       printer->Print(
           *vars,
-          "std::unique_ptr< ::grpc::ClientWriterInterface< $Request$>>"
-          " $Method$("
-          "::grpc::ClientContext* context, ::grpc::WriteOptions options, "
-          "$Response$* response) {\n");
-      printer->Indent();
-      printer->Print(
-          *vars,
-          "return std::unique_ptr< ::grpc::ClientWriterInterface< $Request$>>"
-          "($Method$Raw(context, options, response));\n");
-      printer->Outdent();
-      printer->Print("}\n");
-      printer->Print(
-          *vars,
-          "std::unique_ptr< ::grpc::ClientWriterInterface< $Request$>>"
-          " $Method$("
-          "::grpc::ClientContext* context, const $Request$& first_message, "
-          "::grpc::WriteOptions options, $Response$* response) {\n");
-      printer->Indent();
-      printer->Print(
-          *vars,
-          "return std::unique_ptr< ::grpc::ClientWriterInterface< $Request$>>"
-          "($Method$Raw(context, first_message, options, response));\n");
-      printer->Outdent();
-      printer->Print("}\n");
-      printer->Print(
-          *vars,
           "std::unique_ptr< ::grpc::ClientAsyncWriterInterface< $Request$>>"
           " Async$Method$(::grpc::ClientContext* context, $Response$* "
           "response, "
@@ -237,36 +211,6 @@ void PrintHeaderClientMethodInterfaces(
                      "return std::unique_ptr< "
                      "::grpc::ClientAsyncWriterInterface< $Request$>>("
                      "Async$Method$Raw(context, response, cq, tag));\n");
-      printer->Outdent();
-      printer->Print("}\n");
-      printer->Print(
-          *vars,
-          "std::unique_ptr< ::grpc::ClientAsyncWriterInterface< $Request$>>"
-          " Async$Method$(::grpc::ClientContext* context, ::grpc::WriteOptions "
-          "options, $Response$* "
-          "response, "
-          "::grpc::CompletionQueue* cq, void* tag) {\n");
-      printer->Indent();
-      printer->Print(
-          *vars,
-          "return std::unique_ptr< "
-          "::grpc::ClientAsyncWriterInterface< $Request$>>("
-          "Async$Method$Raw(context, options, response, cq, tag));\n");
-      printer->Outdent();
-      printer->Print("}\n");
-      printer->Print(
-          *vars,
-          "std::unique_ptr< ::grpc::ClientAsyncWriterInterface< $Request$>>"
-          " Async$Method$(::grpc::ClientContext* context, const $Request$& "
-          "first_message, ::grpc::WriteOptions options, $Response$* "
-          "response, "
-          "::grpc::CompletionQueue* cq, void* tag) {\n");
-      printer->Indent();
-      printer->Print(*vars,
-                     "return std::unique_ptr< "
-                     "::grpc::ClientAsyncWriterInterface< $Request$>>("
-                     "Async$Method$Raw(context, first_message, options, "
-                     "response, cq, tag));\n");
       printer->Outdent();
       printer->Print("}\n");
     } else if (method->ServerOnlyStreaming()) {
@@ -308,33 +252,6 @@ void PrintHeaderClientMethodInterfaces(
           "$Method$Raw(context));\n");
       printer->Outdent();
       printer->Print("}\n");
-      printer->Print(*vars,
-                     "std::unique_ptr< ::grpc::ClientReaderWriterInterface< "
-                     "$Request$, $Response$>> "
-                     "$Method$(::grpc::ClientContext* context, "
-                     "::grpc::WriteOptions options) {\n");
-      printer->Indent();
-      printer->Print(
-          *vars,
-          "return std::unique_ptr< "
-          "::grpc::ClientReaderWriterInterface< $Request$, $Response$>>("
-          "$Method$Raw(context, options));\n");
-      printer->Outdent();
-      printer->Print("}\n");
-      printer->Print(*vars,
-                     "std::unique_ptr< ::grpc::ClientReaderWriterInterface< "
-                     "$Request$, $Response$>> "
-                     "$Method$(::grpc::ClientContext* context, const "
-                     "$Request$& first_message, ::grpc::WriteOptions options) "
-                     "{\n");
-      printer->Indent();
-      printer->Print(
-          *vars,
-          "return std::unique_ptr< "
-          "::grpc::ClientReaderWriterInterface< $Request$, $Response$>>("
-          "$Method$Raw(context, first_message, options));\n");
-      printer->Outdent();
-      printer->Print("}\n");
       printer->Print(
           *vars,
           "std::unique_ptr< "
@@ -347,36 +264,6 @@ void PrintHeaderClientMethodInterfaces(
           "return std::unique_ptr< "
           "::grpc::ClientAsyncReaderWriterInterface< $Request$, $Response$>>("
           "Async$Method$Raw(context, cq, tag));\n");
-      printer->Outdent();
-      printer->Print("}\n");
-      printer->Print(
-          *vars,
-          "std::unique_ptr< "
-          "::grpc::ClientAsyncReaderWriterInterface< $Request$, $Response$>> "
-          "Async$Method$(::grpc::ClientContext* context, ::grpc::WriteOptions "
-          "options, "
-          "::grpc::CompletionQueue* cq, void* tag) {\n");
-      printer->Indent();
-      printer->Print(
-          *vars,
-          "return std::unique_ptr< "
-          "::grpc::ClientAsyncReaderWriterInterface< $Request$, $Response$>>("
-          "Async$Method$Raw(context, options, cq, tag));\n");
-      printer->Outdent();
-      printer->Print("}\n");
-      printer->Print(
-          *vars,
-          "std::unique_ptr< "
-          "::grpc::ClientAsyncReaderWriterInterface< $Request$, $Response$>> "
-          "Async$Method$(::grpc::ClientContext* context, const $Request$& "
-          "first_message, ::grpc::WriteOptions options, "
-          "::grpc::CompletionQueue* cq, void* tag) {\n");
-      printer->Indent();
-      printer->Print(
-          *vars,
-          "return std::unique_ptr< "
-          "::grpc::ClientAsyncReaderWriterInterface< $Request$, $Response$>>("
-          "Async$Method$Raw(context, first_message, options, cq, tag));\n");
       printer->Outdent();
       printer->Print("}\n");
     }
@@ -395,31 +282,8 @@ void PrintHeaderClientMethodInterfaces(
           " $Method$Raw("
           "::grpc::ClientContext* context, $Response$* response) = 0;\n");
       printer->Print(*vars,
-                     "virtual ::grpc::ClientWriterInterface< $Request$>*"
-                     " $Method$Raw("
-                     "::grpc::ClientContext* context, ::grpc::WriteOptions "
-                     "options, $Response$* response) = 0;\n");
-      printer->Print(*vars,
-                     "virtual ::grpc::ClientWriterInterface< $Request$>*"
-                     " $Method$Raw("
-                     "::grpc::ClientContext* context, const $Request$& "
-                     "first_message, ::grpc::WriteOptions options, $Response$* "
-                     "response) = 0;\n");
-      printer->Print(*vars,
                      "virtual ::grpc::ClientAsyncWriterInterface< $Request$>*"
                      " Async$Method$Raw(::grpc::ClientContext* context, "
-                     "$Response$* response, "
-                     "::grpc::CompletionQueue* cq, void* tag) = 0;\n");
-      printer->Print(*vars,
-                     "virtual ::grpc::ClientAsyncWriterInterface< $Request$>*"
-                     " Async$Method$Raw(::grpc::ClientContext* context, "
-                     "::grpc::WriteOptions options, "
-                     "$Response$* response, "
-                     "::grpc::CompletionQueue* cq, void* tag) = 0;\n");
-      printer->Print(*vars,
-                     "virtual ::grpc::ClientAsyncWriterInterface< $Request$>*"
-                     " Async$Method$Raw(::grpc::ClientContext* context, const "
-                     "$Request$& first_message, ::grpc::WriteOptions options, "
                      "$Response$* response, "
                      "::grpc::CompletionQueue* cq, void* tag) = 0;\n");
     } else if (method->ServerOnlyStreaming()) {
@@ -439,33 +303,9 @@ void PrintHeaderClientMethodInterfaces(
                      "$Response$>* "
                      "$Method$Raw(::grpc::ClientContext* context) = 0;\n");
       printer->Print(*vars,
-                     "virtual ::grpc::ClientReaderWriterInterface< $Request$, "
-                     "$Response$>* "
-                     "$Method$Raw(::grpc::ClientContext* context, "
-                     "::grpc::WriteOptions options) = 0;\n");
-      printer->Print(*vars,
-                     "virtual ::grpc::ClientReaderWriterInterface< $Request$, "
-                     "$Response$>* "
-                     "$Method$Raw(::grpc::ClientContext* context, const "
-                     "$Request$& first_message, ::grpc::WriteOptions options) "
-                     "= 0;\n");
-      printer->Print(*vars,
                      "virtual ::grpc::ClientAsyncReaderWriterInterface< "
                      "$Request$, $Response$>* "
                      "Async$Method$Raw(::grpc::ClientContext* context, "
-                     "::grpc::CompletionQueue* cq, void* tag) = 0;\n");
-      printer->Print(*vars,
-                     "virtual ::grpc::ClientAsyncReaderWriterInterface< "
-                     "$Request$, $Response$>* "
-                     "Async$Method$Raw(::grpc::ClientContext* context, "
-                     "::grpc::WriteOptions options, "
-                     "::grpc::CompletionQueue* cq, void* tag) = 0;\n");
-      printer->Print(*vars,
-                     "virtual ::grpc::ClientAsyncReaderWriterInterface< "
-                     "$Request$, $Response$>* "
-                     "Async$Method$Raw(::grpc::ClientContext* context, "
-                     "const $Request$& "
-                     "first_message, ::grpc::WriteOptions options,  "
                      "::grpc::CompletionQueue* cq, void* tag) = 0;\n");
     }
   }
@@ -509,30 +349,6 @@ void PrintHeaderClientMethod(Printer *printer, const Method *method,
       printer->Outdent();
       printer->Print("}\n");
       printer->Print(*vars,
-                     "std::unique_ptr< ::grpc::ClientWriter< $Request$>>"
-                     " $Method$("
-                     "::grpc::ClientContext* context, ::grpc::WriteOptions "
-                     "options, $Response$* response) {\n");
-      printer->Indent();
-      printer->Print(*vars,
-                     "return std::unique_ptr< ::grpc::ClientWriter< $Request$>>"
-                     "($Method$Raw(context, options, response));\n");
-      printer->Outdent();
-      printer->Print("}\n");
-      printer->Print(*vars,
-                     "std::unique_ptr< ::grpc::ClientWriter< $Request$>>"
-                     " $Method$("
-                     "::grpc::ClientContext* context, const $Request$& "
-                     "first_message, ::grpc::WriteOptions options, $Response$* "
-                     "response) {\n");
-      printer->Indent();
-      printer->Print(
-          *vars,
-          "return std::unique_ptr< ::grpc::ClientWriter< $Request$>>"
-          "($Method$Raw(context, first_message, options, response));\n");
-      printer->Outdent();
-      printer->Print("}\n");
-      printer->Print(*vars,
                      "std::unique_ptr< ::grpc::ClientAsyncWriter< $Request$>>"
                      " Async$Method$(::grpc::ClientContext* context, "
                      "$Response$* response, "
@@ -542,33 +358,6 @@ void PrintHeaderClientMethod(Printer *printer, const Method *method,
           *vars,
           "return std::unique_ptr< ::grpc::ClientAsyncWriter< $Request$>>("
           "Async$Method$Raw(context, response, cq, tag));\n");
-      printer->Outdent();
-      printer->Print("}\n");
-      printer->Print(*vars,
-                     "std::unique_ptr< ::grpc::ClientAsyncWriter< $Request$>>"
-                     " Async$Method$(::grpc::ClientContext* context, "
-                     "::grpc::WriteOptions options, "
-                     "$Response$* response, "
-                     "::grpc::CompletionQueue* cq, void* tag) {\n");
-      printer->Indent();
-      printer->Print(
-          *vars,
-          "return std::unique_ptr< ::grpc::ClientAsyncWriter< $Request$>>("
-          "Async$Method$Raw(context, options, response, cq, tag));\n");
-      printer->Outdent();
-      printer->Print("}\n");
-      printer->Print(*vars,
-                     "std::unique_ptr< ::grpc::ClientAsyncWriter< $Request$>>"
-                     " Async$Method$(::grpc::ClientContext* context, const "
-                     "$Request$& first_message, ::grpc::WriteOptions options, "
-                     "$Response$* response, "
-                     "::grpc::CompletionQueue* cq, void* tag) {\n");
-      printer->Indent();
-      printer->Print(
-          *vars,
-          "return std::unique_ptr< ::grpc::ClientAsyncWriter< $Request$>>("
-          "Async$Method$Raw(context, first_message, options, response, cq, "
-          "tag));\n");
       printer->Outdent();
       printer->Print("}\n");
     } else if (method->ServerOnlyStreaming()) {
@@ -609,30 +398,6 @@ void PrintHeaderClientMethod(Printer *printer, const Method *method,
                      "$Method$Raw(context));\n");
       printer->Outdent();
       printer->Print("}\n");
-      printer->Print(
-          *vars,
-          "std::unique_ptr< ::grpc::ClientReaderWriter< $Request$, $Response$>>"
-          " $Method$(::grpc::ClientContext* context, ::grpc::WriteOptions "
-          "options) {\n");
-      printer->Indent();
-      printer->Print(*vars,
-                     "return std::unique_ptr< "
-                     "::grpc::ClientReaderWriter< $Request$, $Response$>>("
-                     "$Method$Raw(context, options));\n");
-      printer->Outdent();
-      printer->Print("}\n");
-      printer->Print(
-          *vars,
-          "std::unique_ptr< ::grpc::ClientReaderWriter< $Request$, $Response$>>"
-          " $Method$(::grpc::ClientContext* context, const $Request$& "
-          "first_message, ::grpc::WriteOptions options) {\n");
-      printer->Indent();
-      printer->Print(*vars,
-                     "return std::unique_ptr< "
-                     "::grpc::ClientReaderWriter< $Request$, $Response$>>("
-                     "$Method$Raw(context, first_message, options));\n");
-      printer->Outdent();
-      printer->Print("}\n");
       printer->Print(*vars,
                      "std::unique_ptr<  ::grpc::ClientAsyncReaderWriter< "
                      "$Request$, $Response$>> "
@@ -643,33 +408,6 @@ void PrintHeaderClientMethod(Printer *printer, const Method *method,
                      "return std::unique_ptr< "
                      "::grpc::ClientAsyncReaderWriter< $Request$, $Response$>>("
                      "Async$Method$Raw(context, cq, tag));\n");
-      printer->Outdent();
-      printer->Print("}\n");
-      printer->Print(*vars,
-                     "std::unique_ptr<  ::grpc::ClientAsyncReaderWriter< "
-                     "$Request$, $Response$>> "
-                     "Async$Method$(::grpc::ClientContext* context, "
-                     "::grpc::WriteOptions options, "
-                     "::grpc::CompletionQueue* cq, void* tag) {\n");
-      printer->Indent();
-      printer->Print(*vars,
-                     "return std::unique_ptr< "
-                     "::grpc::ClientAsyncReaderWriter< $Request$, $Response$>>("
-                     "Async$Method$Raw(context, options, cq, tag));\n");
-      printer->Outdent();
-      printer->Print("}\n");
-      printer->Print(*vars,
-                     "std::unique_ptr<  ::grpc::ClientAsyncReaderWriter< "
-                     "$Request$, $Response$>> "
-                     "Async$Method$(::grpc::ClientContext* context, const "
-                     "$Request$& first_message, ::grpc::WriteOptions options, "
-                     "::grpc::CompletionQueue* cq, void* tag) {\n");
-      printer->Indent();
-      printer->Print(
-          *vars,
-          "return std::unique_ptr< "
-          "::grpc::ClientAsyncReaderWriter< $Request$, $Response$>>("
-          "Async$Method$Raw(context, first_message, options, cq, tag));\n");
       printer->Outdent();
       printer->Print("}\n");
     }
@@ -686,30 +424,8 @@ void PrintHeaderClientMethod(Printer *printer, const Method *method,
                      "::grpc::ClientContext* context, $Response$* response) "
                      "override;\n");
       printer->Print(*vars,
-                     "::grpc::ClientWriter< $Request$>* $Method$Raw("
-                     "::grpc::ClientContext* context, ::grpc::WriteOptions "
-                     "options, $Response$* response) "
-                     "override;\n");
-      printer->Print(*vars,
-                     "::grpc::ClientWriter< $Request$>* $Method$Raw("
-                     "::grpc::ClientContext* context, const $Request$& "
-                     "first_message, ::grpc::WriteOptions options, $Response$* "
-                     "response) "
-                     "override;\n");
-      printer->Print(*vars,
                      "::grpc::ClientAsyncWriter< $Request$>* Async$Method$Raw("
                      "::grpc::ClientContext* context, $Response$* response, "
-                     "::grpc::CompletionQueue* cq, void* tag) override;\n");
-      printer->Print(*vars,
-                     "::grpc::ClientAsyncWriter< $Request$>* Async$Method$Raw("
-                     "::grpc::ClientContext* context, ::grpc::WriteOptions "
-                     "options, $Response$* response, "
-                     "::grpc::CompletionQueue* cq, void* tag) override;\n");
-      printer->Print(*vars,
-                     "::grpc::ClientAsyncWriter< $Request$>* Async$Method$Raw("
-                     "::grpc::ClientContext* context, const $Request$& "
-                     "first_message, ::grpc::WriteOptions options, $Response$* "
-                     "response, "
                      "::grpc::CompletionQueue* cq, void* tag) override;\n");
     } else if (method->ServerOnlyStreaming()) {
       printer->Print(*vars,
@@ -726,27 +442,8 @@ void PrintHeaderClientMethod(Printer *printer, const Method *method,
                      "::grpc::ClientReaderWriter< $Request$, $Response$>* "
                      "$Method$Raw(::grpc::ClientContext* context) override;\n");
       printer->Print(*vars,
-                     "::grpc::ClientReaderWriter< $Request$, $Response$>* "
-                     "$Method$Raw(::grpc::ClientContext* context, "
-                     "::grpc::WriteOptions options) override;\n");
-      printer->Print(*vars,
-                     "::grpc::ClientReaderWriter< $Request$, $Response$>* "
-                     "$Method$Raw(::grpc::ClientContext* context, const "
-                     "$Request$& first_message, ::grpc::WriteOptions options) "
-                     "override;\n");
-      printer->Print(*vars,
                      "::grpc::ClientAsyncReaderWriter< $Request$, $Response$>* "
                      "Async$Method$Raw(::grpc::ClientContext* context, "
-                     "::grpc::CompletionQueue* cq, void* tag) override;\n");
-      printer->Print(*vars,
-                     "::grpc::ClientAsyncReaderWriter< $Request$, $Response$>* "
-                     "Async$Method$Raw(::grpc::ClientContext* context, "
-                     "::grpc::WriteOptions options, "
-                     "::grpc::CompletionQueue* cq, void* tag) override;\n");
-      printer->Print(*vars,
-                     "::grpc::ClientAsyncReaderWriter< $Request$, $Response$>* "
-                     "Async$Method$Raw(::grpc::ClientContext* context, const "
-                     "$Request$& first_message, ::grpc::WriteOptions options, "
                      "::grpc::CompletionQueue* cq, void* tag) override;\n");
     }
   }
@@ -1399,27 +1096,6 @@ void PrintSourceClientMethod(Printer *printer, const Method *method,
                    "context, response);\n"
                    "}\n\n");
     printer->Print(*vars,
-                   "::grpc::ClientWriter< $Request$>* "
-                   "$ns$$Service$::Stub::$Method$Raw("
-                   "::grpc::ClientContext* context, ::grpc::WriteOptions "
-                   "options, $Response$* response) {\n");
-    printer->Print(*vars,
-                   "  return new ::grpc::ClientWriter< $Request$>("
-                   "channel_.get(), "
-                   "rpcmethod_$Method$_, "
-                   "context, options, response);\n"
-                   "}\n\n");
-    printer->Print(*vars,
-                   "::grpc::ClientWriter< $Request$>* "
-                   "$ns$$Service$::Stub::$Method$Raw("
-                   "::grpc::ClientContext* context, const $Request$& first_message, ::grpc::WriteOptions options, $Response$* response) {\n");
-    printer->Print(*vars,
-                   "  return new ::grpc::ClientWriter< $Request$>("
-                   "channel_.get(), "
-                   "rpcmethod_$Method$_, "
-                   "context, first_message, options, response);\n"
-                   "}\n\n");
-    printer->Print(*vars,
                    "::grpc::ClientAsyncWriter< $Request$>* "
                    "$ns$$Service$::Stub::Async$Method$Raw("
                    "::grpc::ClientContext* context, $Response$* response, "
@@ -1429,28 +1105,6 @@ void PrintSourceClientMethod(Printer *printer, const Method *method,
                    "channel_.get(), cq, "
                    "rpcmethod_$Method$_, "
                    "context, response, tag);\n"
-                   "}\n\n");
-    printer->Print(*vars,
-                   "::grpc::ClientAsyncWriter< $Request$>* "
-                   "$ns$$Service$::Stub::Async$Method$Raw("
-                   "::grpc::ClientContext* context, ::grpc::WriteOptions options, $Response$* response, "
-                   "::grpc::CompletionQueue* cq, void* tag) {\n");
-    printer->Print(*vars,
-                   "  return new ::grpc::ClientAsyncWriter< $Request$>("
-                   "channel_.get(), cq, "
-                   "rpcmethod_$Method$_, "
-                   "context, options, response, tag);\n"
-                   "}\n\n");
-    printer->Print(*vars,
-                   "::grpc::ClientAsyncWriter< $Request$>* "
-                   "$ns$$Service$::Stub::Async$Method$Raw("
-                   "::grpc::ClientContext* context, const $Request$& first_message, ::grpc::WriteOptions options, $Response$* response, "
-                   "::grpc::CompletionQueue* cq, void* tag) {\n");
-    printer->Print(*vars,
-                   "  return new ::grpc::ClientAsyncWriter< $Request$>("
-                   "channel_.get(), cq, "
-                   "rpcmethod_$Method$_, "
-                   "context, first_message, options, response, tag);\n"
                    "}\n\n");
   } else if (method->ServerOnlyStreaming()) {
     printer->Print(
@@ -1489,28 +1143,6 @@ void PrintSourceClientMethod(Printer *printer, const Method *method,
                    "}\n\n");
     printer->Print(
         *vars,
-        "::grpc::ClientReaderWriter< $Request$, $Response$>* "
-        "$ns$$Service$::Stub::$Method$Raw(::grpc::ClientContext* context, ::grpc::WriteOptions options) {\n");
-    printer->Print(*vars,
-                   "  return new ::grpc::ClientReaderWriter< "
-                   "$Request$, $Response$>("
-                   "channel_.get(), "
-                   "rpcmethod_$Method$_, "
-                   "context,options);\n"
-                   "}\n\n");
-    printer->Print(
-        *vars,
-        "::grpc::ClientReaderWriter< $Request$, $Response$>* "
-        "$ns$$Service$::Stub::$Method$Raw(::grpc::ClientContext* context, const $Request$& first_message, ::grpc::WriteOptions options) {\n");
-    printer->Print(*vars,
-                   "  return new ::grpc::ClientReaderWriter< "
-                   "$Request$, $Response$>("
-                   "channel_.get(), "
-                   "rpcmethod_$Method$_, "
-                   "context, first_message, options);\n"
-                   "}\n\n");
-    printer->Print(
-        *vars,
         "::grpc::ClientAsyncReaderWriter< $Request$, $Response$>* "
         "$ns$$Service$::Stub::Async$Method$Raw(::grpc::ClientContext* context, "
         "::grpc::CompletionQueue* cq, void* tag) {\n");
@@ -1520,30 +1152,6 @@ void PrintSourceClientMethod(Printer *printer, const Method *method,
                    "channel_.get(), cq, "
                    "rpcmethod_$Method$_, "
                    "context, tag);\n"
-                   "}\n\n");
-    printer->Print(
-        *vars,
-        "::grpc::ClientAsyncReaderWriter< $Request$, $Response$>* "
-        "$ns$$Service$::Stub::Async$Method$Raw(::grpc::ClientContext* context, ::grpc::WriteOptions options, "
-        "::grpc::CompletionQueue* cq, void* tag) {\n");
-    printer->Print(*vars,
-                   "  return new "
-                   "::grpc::ClientAsyncReaderWriter< $Request$, $Response$>("
-                   "channel_.get(), cq, "
-                   "rpcmethod_$Method$_, "
-                   "context, options, tag);\n"
-                   "}\n\n");
-    printer->Print(
-        *vars,
-        "::grpc::ClientAsyncReaderWriter< $Request$, $Response$>* "
-        "$ns$$Service$::Stub::Async$Method$Raw(::grpc::ClientContext* context, const $Request$& first_message, ::grpc::WriteOptions options, "
-        "::grpc::CompletionQueue* cq, void* tag) {\n");
-    printer->Print(*vars,
-                   "  return new "
-                   "::grpc::ClientAsyncReaderWriter< $Request$, $Response$>("
-                   "channel_.get(), cq, "
-                   "rpcmethod_$Method$_, "
-                   "context, first_message, options, tag);\n"
                    "}\n\n");
   }
 }

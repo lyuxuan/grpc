@@ -189,69 +189,15 @@ class ClientAsyncWriter final : public ClientAsyncWriterInterface<W> {
       : context_(context), call_(channel->CreateCall(method, context, cq)) {
     finish_ops_.RecvMessage(response);
     finish_ops_.AllowNoMessage();
-
-    init_ops_.set_output_tag(tag);
-    init_ops_.SendInitialMetadata(context->send_initial_metadata_,
-                                  context->initial_metadata_flags());
-    call_.PerformOps(&init_ops_);
-  }
-
-// constructor taking WriteOptions
-  template <class R>
-  ClientAsyncWriter(ChannelInterface* channel, CompletionQueue* cq,
-                    const RpcMethod& method, ClientContext* context, WriteOptions options,
-                    R* response, void* tag)
-      : context_(context), call_(channel->CreateCall(method, context, cq)) {
-    finish_ops_.RecvMessage(response);
-    finish_ops_.AllowNoMessage();
-    if (options.get_buffer_hint()) {
-      // coalesce init metadata and later message to be sent
+    // if corked bit is set in context, we buffer up the initial metadata to coalesce with later message to be sent
+    if (context_->initial_metadata_corked_) {
       write_ops_.SendInitialMetadata(context->send_initial_metadata_, context->initial_metadata_flags());
-    }
-    else if (options.is_last_message()) {
-      // coalesce init metadata and trailing metadata
-      write_ops_.set_output_tag(tag);
-      write_ops_.SendInitialMetadata(context->send_initial_metadata_, context->initial_metadata_flags());
-      write_ops_.ClientSendClose();
-      call_.PerformOps(&write_ops_);
-      // TODO: need handling for writes after this constructor, since writes is done already.
     }
     else {
-      // No WriteOptions is set or only options.get_no_compression() is true.
-      // no compression setting here will be ignored
       init_ops_.set_output_tag(tag);
       init_ops_.SendInitialMetadata(context->send_initial_metadata_,
                                     context->initial_metadata_flags());
       call_.PerformOps(&init_ops_);
-    }
-  }
-
-// constructor taking a message and WriteOptions
-  template <class R>
-  ClientAsyncWriter(ChannelInterface* channel, CompletionQueue* cq,
-                    const RpcMethod& method, ClientContext* context, const W& first_message, WriteOptions options,
-                    R* response, void* tag)
-      : context_(context), call_(channel->CreateCall(method, context, cq)) {
-    finish_ops_.RecvMessage(response);
-    finish_ops_.AllowNoMessage();
-    if (options.is_last_message()) {
-      // coalesce init metadata, first_message and trailing metadata
-      write_ops_.set_output_tag(tag);
-      write_ops_.SendInitialMetadata(context->send_initial_metadata_, context->initial_metadata_flags());
-      // TODO(ctiller): don't assert
-      GPR_CODEGEN_ASSERT(write_ops_.SendMessage(first_message).ok());
-      write_ops_.ClientSendClose();
-      call_.PerformOps(&write_ops_);
-      // TODO: special handling for writes after this constructor
-    }
-    else {
-      // coalesce init metadata and first_message
-      write_ops_.set_output_tag(tag);
-      write_ops_.SendInitialMetadata(context->send_initial_metadata_,
-                                    context->initial_metadata_flags());
-      // TODO(ctiller): don't assert
-      GPR_CODEGEN_ASSERT(write_ops_.SendMessage(first_message).ok());
-      call_.PerformOps(&write_ops_);
     }
   }
 
@@ -328,62 +274,15 @@ class ClientAsyncReaderWriter final
                           const RpcMethod& method, ClientContext* context,
                           void* tag)
       : context_(context), call_(channel->CreateCall(method, context, cq)) {
-    init_ops_.set_output_tag(tag);
-    init_ops_.SendInitialMetadata(context->send_initial_metadata_,
-                                  context->initial_metadata_flags());
-    call_.PerformOps(&init_ops_);
-  }
-
-// constructor taking WriteOptions
-  ClientAsyncReaderWriter(ChannelInterface* channel, CompletionQueue* cq,
-                          const RpcMethod& method, ClientContext* context, WriteOptions options,
-                          void* tag)
-      : context_(context), call_(channel->CreateCall(method, context, cq)) {
-    if (options.get_buffer_hint()) {
-      // coalesce init metadata and later message to be sent
+    if (context_->initial_metadata_corked_) {
+      // if corked bit is set in context, we buffer up the initial metadata to coalesce with later message to be sent
       write_ops_.SendInitialMetadata(context->send_initial_metadata_, context->initial_metadata_flags());
     }
-    else if (options.is_last_message()) {
-      // coalesce init metadata and trailing metadata
-      write_no_msg_ops_.set_output_tag(tag);
-      write_no_msg_ops_.SendInitialMetadata(context->send_initial_metadata_, context->initial_metadata_flags());
-      write_no_msg_ops_.ClientSendClose();
-      call_.PerformOps(&write_no_msg_ops_);
-      // TODO: need handling for writes after this constructor, since writes is done already.
-    }
     else {
-      // No WriteOptions is set or only options.get_no_compression() is true.
-      // no compression setting here will be ignored
       init_ops_.set_output_tag(tag);
       init_ops_.SendInitialMetadata(context->send_initial_metadata_,
                                     context->initial_metadata_flags());
       call_.PerformOps(&init_ops_);
-    }
-  }
-
-// constructor taking a first_message and WriteOptions
-  ClientAsyncReaderWriter(ChannelInterface* channel, CompletionQueue* cq,
-                          const RpcMethod& method, ClientContext* context, const W& first_message, WriteOptions options,
-                          void* tag)
-      : context_(context), call_(channel->CreateCall(method, context, cq)) {
-    if (options.is_last_message()) {
-      // coalesce init metadata, first_message and trailing metadata
-      write_ops_.set_output_tag(tag);
-      write_ops_.SendInitialMetadata(context->send_initial_metadata_, context->initial_metadata_flags());
-      // TODO(ctiller): don't assert
-      GPR_CODEGEN_ASSERT(write_ops_.SendMessage(first_message).ok());
-      write_ops_.ClientSendClose();
-      call_.PerformOps(&write_ops_);
-      // TODO: special handling for writes after this constructor
-    }
-    else {
-      // coalesce init metadata and first_message
-      write_ops_.set_output_tag(tag);
-      write_ops_.SendInitialMetadata(context->send_initial_metadata_,
-                                    context->initial_metadata_flags());
-      // TODO(ctiller): don't assert
-      GPR_CODEGEN_ASSERT(write_ops_.SendMessage(first_message).ok());
-      call_.PerformOps(&write_ops_);
     }
   }
 
@@ -443,9 +342,6 @@ class ClientAsyncReaderWriter final
   CallOpSet<CallOpRecvInitialMetadata> meta_ops_;
   CallOpSet<CallOpRecvInitialMetadata, CallOpRecvMessage<R>> read_ops_;
   CallOpSet<CallOpSendInitialMetadata, CallOpSendMessage, CallOpClientSendClose> write_ops_;
-  CallOpSet<CallOpSendInitialMetadata, CallOpClientSendClose> write_no_msg_ops_;
-
-  // CallOpSet<CallOpClientSendClose> writes_done_ops_;
   CallOpSet<CallOpRecvInitialMetadata, CallOpClientRecvStatus> finish_ops_;
 };
 
@@ -579,6 +475,7 @@ class ServerAsyncWriter final : public ServerAsyncWriterInterface<W> {
     if (options.is_last_message()) {
       options.set_buffer_hint();
     }
+
     if (!ctx_->sent_initial_metadata_) {
       write_ops_.SendInitialMetadata(ctx_->initial_metadata_,
                                      ctx_->initial_metadata_flags());

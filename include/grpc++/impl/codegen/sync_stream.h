@@ -164,7 +164,7 @@ class ClientReader final : public ClientReaderInterface<R> {
   }
 
   bool NextMessageSize(uint32_t* sz) override {
-    *sz = call_.max_receive_message_size();
+    *sz = INT_MAX;
     return true;
   }
 
@@ -217,40 +217,7 @@ class ClientWriter : public ClientWriterInterface<W> {
     finish_ops_.RecvMessage(response);
     finish_ops_.AllowNoMessage();
 
-    CallOpSet<CallOpSendInitialMetadata> ops;
-    ops.SendInitialMetadata(context->send_initial_metadata_,
-                            context->initial_metadata_flags());
-    call_.PerformOps(&ops);
-    cq_.Pluck(&ops);
-  }
-
-  template <class R>
-  ClientWriter(ChannelInterface* channel, const RpcMethod& method,
-               ClientContext* context, WriteOptions options, R* response)
-      : context_(context), call_(channel->CreateCall(method, context, &cq_)) {
-    //TODO: probably need some handling for writeoptions
-    finish_ops_.RecvMessage(response);
-    finish_ops_.AllowNoMessage();
-
-    CallOpSet<CallOpSendInitialMetadata> ops;
-    ops.SendInitialMetadata(context->send_initial_metadata_,
-                            context->initial_metadata_flags());
-    call_.PerformOps(&ops);
-    cq_.Pluck(&ops);
-  }
-
-  template <class R>
-  ClientWriter(ChannelInterface* channel, const RpcMethod& method,
-               ClientContext* context, const W& first_message, WriteOptions options, R* response)
-      : context_(context), call_(channel->CreateCall(method, context, &cq_)) {
-    if (options.is_last_message()) {
-      this->WriteLast(first_message, options);
-    }
-    else {
-      //TODO: probably need some handling for writeoptions
-      finish_ops_.RecvMessage(response);
-      finish_ops_.AllowNoMessage();
-
+    if (!context_->initial_metadata_corked_) {
       CallOpSet<CallOpSendInitialMetadata> ops;
       ops.SendInitialMetadata(context->send_initial_metadata_,
                               context->initial_metadata_flags());
@@ -270,17 +237,28 @@ class ClientWriter : public ClientWriterInterface<W> {
 
   using WriterInterface<W>::Write;
   bool Write(const W& msg, WriteOptions options) override {
+    CallOpSet<CallOpSendInitialMetadata, CallOpSendMessage, CallOpClientSendClose> ops;
+
     if (options.is_last_message()) {
       options.set_buffer_hint();
-      CallOpSet<CallOpSendMessage, CallOpClientSendClose> ops;
+      if (context_->initial_metadata_corked_) {
+        ops.SendInitialMetadata(context_->send_initial_metadata_,
+                                context_->initial_metadata_flags());
+        context_->sent_initial_metadata_corked(false);
+      }
       if (!ops.SendMessage(msg, options).ok()) {
         return false;
       }
       ops.ClientSendClose();
       call_.PerformOps(&ops);
       return cq_.Pluck(&ops);
-    } else {
-      CallOpSet<CallOpSendMessage> ops;
+    }
+    else {
+      if (context_->initial_metadata_corked_) {
+        ops.SendInitialMetadata(context_->send_initial_metadata_,
+                                context_->initial_metadata_flags());
+        context_->sent_initial_metadata_corked(false);
+      }
       if (!ops.SendMessage(msg, options).ok()) {
         return false;
       }
@@ -343,33 +321,13 @@ class ClientReaderWriter final : public ClientReaderWriterInterface<W, R> {
   ClientReaderWriter(ChannelInterface* channel, const RpcMethod& method,
                      ClientContext* context)
       : context_(context), call_(channel->CreateCall(method, context, &cq_)) {
-    CallOpSet<CallOpSendInitialMetadata> ops;
-    ops.SendInitialMetadata(context->send_initial_metadata_,
-                            context->initial_metadata_flags());
-    call_.PerformOps(&ops);
-    cq_.Pluck(&ops);
-  }
-
-  ClientReaderWriter(ChannelInterface* channel, const RpcMethod& method,
-                     ClientContext* context, WriteOptions options)
-  // TODO: probably need some special handling for writeoptions
-      : context_(context), call_(channel->CreateCall(method, context, &cq_)) {
-    CallOpSet<CallOpSendInitialMetadata> ops;
-    ops.SendInitialMetadata(context->send_initial_metadata_,
-                            context->initial_metadata_flags());
-    call_.PerformOps(&ops);
-    cq_.Pluck(&ops);
-  }
-
-  ClientReaderWriter(ChannelInterface* channel, const RpcMethod& method,
-                     ClientContext* context, const W& first_message, WriteOptions options)
-      : context_(context), call_(channel->CreateCall(method, context, &cq_)) {
-// TODO: special handling for first message and options
-    CallOpSet<CallOpSendInitialMetadata> ops;
-    ops.SendInitialMetadata(context->send_initial_metadata_,
-                            context->initial_metadata_flags());
-    call_.PerformOps(&ops);
-    cq_.Pluck(&ops);
+    if (!context_->initial_metadata_corked_) {
+      CallOpSet<CallOpSendInitialMetadata> ops;
+      ops.SendInitialMetadata(context->send_initial_metadata_,
+                              context->initial_metadata_flags());
+      call_.PerformOps(&ops);
+      cq_.Pluck(&ops);
+    }
   }
 
   void WaitForInitialMetadata() override {
@@ -382,7 +340,7 @@ class ClientReaderWriter final : public ClientReaderWriterInterface<W, R> {
   }
 
   bool NextMessageSize(uint32_t* sz) override {
-    *sz = call_.max_receive_message_size();
+    *sz = INT_MAX;
     return true;
   }
 
@@ -398,9 +356,15 @@ class ClientReaderWriter final : public ClientReaderWriterInterface<W, R> {
 
   using WriterInterface<W>::Write;
   bool Write(const W& msg, WriteOptions options) override {
+    CallOpSet<CallOpSendInitialMetadata, CallOpSendMessage, CallOpClientSendClose> ops;
+
     if (options.is_last_message()) {
       options.set_buffer_hint();
-      CallOpSet<CallOpSendMessage, CallOpClientSendClose> ops;
+      if (context_->initial_metadata_corked_) {
+        ops.SendInitialMetadata(context_->send_initial_metadata_,
+                                context_->initial_metadata_flags());
+        context_->sent_initial_metadata_corked(false);
+      }
       if (!ops.SendMessage(msg, options).ok()) {
         return false;
       }
@@ -408,7 +372,11 @@ class ClientReaderWriter final : public ClientReaderWriterInterface<W, R> {
       call_.PerformOps(&ops);
       return cq_.Pluck(&ops);
     } else {
-      CallOpSet<CallOpSendMessage> ops;
+      if (context_->initial_metadata_corked_) {
+        ops.SendInitialMetadata(context_->send_initial_metadata_,
+                                context_->initial_metadata_flags());
+        context_->sent_initial_metadata_corked(false);
+      }
       if (!ops.SendMessage(msg, options).ok()) {
         return false;
       }
@@ -467,7 +435,7 @@ class ServerReader final : public ServerReaderInterface<R> {
   }
 
   bool NextMessageSize(uint32_t* sz) override {
-    *sz = call_->max_receive_message_size();
+    *sz = INT_MAX;
     return true;
   }
 
@@ -562,7 +530,7 @@ class ServerReaderWriterBody final {
   }
 
   bool NextMessageSize(uint32_t* sz) {
-    *sz = call_->max_receive_message_size();
+    *sz = INT_MAX;
     return true;
   }
 

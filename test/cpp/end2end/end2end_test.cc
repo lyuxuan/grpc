@@ -770,6 +770,39 @@ TEST_P(End2endTest, BidiStream) {
   EXPECT_TRUE(s.ok());
 }
 
+TEST_P(End2endTest, BidiStreamCorkedApi) {
+  ResetStub();
+  EchoRequest request;
+  EchoResponse response;
+  ClientContext context;
+  context.AddMetadata(kServerFinishAfterReads, "3");
+  context.sent_initial_metadata_corked(true);
+  grpc::string msg("hello");
+
+  auto stream = stub_->BidiStream(&context);
+
+  request.set_message(msg + "0");
+  EXPECT_TRUE(stream->Write(request));
+  EXPECT_TRUE(stream->Read(&response));
+  EXPECT_EQ(response.message(), request.message());
+
+  request.set_message(msg + "1");
+  EXPECT_TRUE(stream->Write(request));
+  EXPECT_TRUE(stream->Read(&response));
+  EXPECT_EQ(response.message(), request.message());
+
+  request.set_message(msg + "2");
+  stream->WriteLast(request, WriteOptions());
+  EXPECT_TRUE(stream->Read(&response));
+  EXPECT_EQ(response.message(), request.message());
+
+  EXPECT_FALSE(stream->Read(&response));
+  EXPECT_FALSE(stream->Read(&response));
+
+  Status s = stream->Finish();
+  EXPECT_TRUE(s.ok());
+}
+
 // Talk to the two services with the same name but different package names.
 // The two stubs are created on the same channel.
 TEST_P(End2endTest, DiffPackageServices) {

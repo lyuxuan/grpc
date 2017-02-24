@@ -360,7 +360,7 @@ class ClientContext {
            (cacheable_ ? GRPC_INITIAL_METADATA_CACHEABLE_REQUEST : 0) |
            (wait_for_ready_explicitly_set_
                 ? GRPC_INITIAL_METADATA_WAIT_FOR_READY_EXPLICITLY_SET
-                : 0);
+                : 0) | (initial_metadata_corked_? GRPC_INITIAL_METADATA_CORKED : 0);
   }
 
   grpc::string authority() { return authority_; }
@@ -387,7 +387,7 @@ class ClientContext {
   PropagationOptions propagation_options_;
 
   grpc_compression_algorithm compression_algorithm_;
-  bool corked_;
+  bool initial_metadata_corked_;
 };
 
 }  // namespace grpc

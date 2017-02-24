@@ -305,10 +305,21 @@ Status TestServiceImpl::BidiStream(
         new std::thread(&TestServiceImpl::ServerTryCancel, this, context);
   }
 
+// kServerFinishAfterReads suggests after how many reads, the server should write the last message and send status (coalesced using WriteLast)
+  int server_write_last = GetIntValueFromMetadata(
+      kServerFinishAfterReads, context->client_metadata(), 0);
+
+  int read_counts = 0;
   while (stream->Read(&request)) {
+    read_counts++;
     gpr_log(GPR_INFO, "recv msg %s", request.message().c_str());
     response.set_message(request.message());
-    stream->Write(response);
+    if (read_counts == server_write_last) {
+      stream->WriteLast(response, WriteOptions());
+    }
+    else {
+      stream->Write(response);
+    }
   }
 
   if (server_try_cancel_thd != nullptr) {
