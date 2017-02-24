@@ -305,7 +305,8 @@ Status TestServiceImpl::BidiStream(
         new std::thread(&TestServiceImpl::ServerTryCancel, this, context);
   }
 
-// kServerFinishAfterReads suggests after how many reads, the server should write the last message and send status (coalesced using WriteLast)
+  // kServerFinishAfterReads suggests after how many reads, the server should
+  // write the last message and send status (coalesced using WriteLast)
   int server_write_last = GetIntValueFromMetadata(
       kServerFinishAfterReads, context->client_metadata(), 0);
 
@@ -316,8 +317,7 @@ Status TestServiceImpl::BidiStream(
     response.set_message(request.message());
     if (read_counts == server_write_last) {
       stream->WriteLast(response, WriteOptions());
-    }
-    else {
+    } else {
       stream->Write(response);
     }
   }

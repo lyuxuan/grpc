@@ -237,7 +237,9 @@ class ClientWriter : public ClientWriterInterface<W> {
 
   using WriterInterface<W>::Write;
   bool Write(const W& msg, WriteOptions options) override {
-    CallOpSet<CallOpSendInitialMetadata, CallOpSendMessage, CallOpClientSendClose> ops;
+    CallOpSet<CallOpSendInitialMetadata, CallOpSendMessage,
+              CallOpClientSendClose>
+        ops;
 
     if (options.is_last_message()) {
       options.set_buffer_hint();
@@ -252,8 +254,7 @@ class ClientWriter : public ClientWriterInterface<W> {
       ops.ClientSendClose();
       call_.PerformOps(&ops);
       return cq_.Pluck(&ops);
-    }
-    else {
+    } else {
       if (context_->initial_metadata_corked_) {
         ops.SendInitialMetadata(context_->send_initial_metadata_,
                                 context_->initial_metadata_flags());
@@ -356,7 +357,9 @@ class ClientReaderWriter final : public ClientReaderWriterInterface<W, R> {
 
   using WriterInterface<W>::Write;
   bool Write(const W& msg, WriteOptions options) override {
-    CallOpSet<CallOpSendInitialMetadata, CallOpSendMessage, CallOpClientSendClose> ops;
+    CallOpSet<CallOpSendInitialMetadata, CallOpSendMessage,
+              CallOpClientSendClose>
+        ops;
 
     if (options.is_last_message()) {
       options.set_buffer_hint();

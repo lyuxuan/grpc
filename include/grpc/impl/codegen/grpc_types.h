@@ -302,7 +302,8 @@ typedef enum grpc_call_error {
     streaming message and trailing metadata into the same core batch */
 #define GRPC_WRITE_LAST_MESSAGE (0x00000004u)
 /** Mask of all valid flags. */
-#define GRPC_WRITE_USED_MASK (GRPC_WRITE_BUFFER_HINT | GRPC_WRITE_NO_COMPRESS | GRPC_WRITE_LAST_MESSAGE)
+#define GRPC_WRITE_USED_MASK \
+  (GRPC_WRITE_BUFFER_HINT | GRPC_WRITE_NO_COMPRESS | GRPC_WRITE_LAST_MESSAGE)
 
 /* Initial metadata flags */
 /** Signal that the call is idempotent */
@@ -318,10 +319,10 @@ typedef enum grpc_call_error {
 #define GRPC_INITIAL_METADATA_CORKED (0x00000100u)
 
 /** Mask of all valid flags */
-#define GRPC_INITIAL_METADATA_USED_MASK       \
-  (GRPC_INITIAL_METADATA_IDEMPOTENT_REQUEST | \
-   GRPC_INITIAL_METADATA_WAIT_FOR_READY |     \
-   GRPC_INITIAL_METADATA_CACHEABLE_REQUEST |  \
+#define GRPC_INITIAL_METADATA_USED_MASK                  \
+  (GRPC_INITIAL_METADATA_IDEMPOTENT_REQUEST |            \
+   GRPC_INITIAL_METADATA_WAIT_FOR_READY |                \
+   GRPC_INITIAL_METADATA_CACHEABLE_REQUEST |             \
    GRPC_INITIAL_METADATA_WAIT_FOR_READY_EXPLICITLY_SET | \
    GRPC_INITIAL_METADATA_CORKED)
 

@@ -145,7 +145,7 @@ class WriteOptions {
   /// set_buffer_hint will be removed in the future
   inline WriteOptions& set_corked() {
     SetBit(GRPC_WRITE_BUFFER_HINT);
-    return *this;    
+    return *this;
   }
 
   inline WriteOptions& clear_corked() {

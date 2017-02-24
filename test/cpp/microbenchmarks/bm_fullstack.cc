@@ -959,11 +959,10 @@ static void BM_StreamingPingPongAsyncCoalesced(benchmark::State& state) {
               if (write_and_finish == 1) {
                 response_rw.WriteAndFinish(send_response, WriteOptions(),
                                            Status::OK, tag(3));
-              }
-              else {
+              } else {
                 response_rw.WriteLast(send_response, WriteOptions(), tag(3));
-                need_tags &= ~(1<<2);
-                need_tags &= ~(1<<3);
+                need_tags &= ~(1 << 2);
+                need_tags &= ~(1 << 3);
               }
             } else {
               response_rw.Write(send_response, tag(3));
@@ -977,8 +976,7 @@ static void BM_StreamingPingPongAsyncCoalesced(benchmark::State& state) {
       if (max_ping_pongs == 0) {
         request_rw->WritesDone(tag(4));
         response_rw.Finish(Status::OK, tag(5));
-      }
-      else {
+      } else {
         if (write_and_finish != 1) {
           response_rw.Finish(Status::OK, tag(5));
         }
@@ -991,9 +989,8 @@ static void BM_StreamingPingPongAsyncCoalesced(benchmark::State& state) {
         need_tags = (1 << 4) | (1 << 5) | (1 << 6);
       } else {
         if (write_and_finish != 1) {
-          need_tags = (1<<2)|(1<<3)|(1<<5) | (1<<6);
-        }
-        else {
+          need_tags = (1 << 2) | (1 << 3) | (1 << 5) | (1 << 6);
+        } else {
           need_tags = (1 << 6);
         }
       }
@@ -1330,11 +1327,14 @@ BENCHMARK_TEMPLATE(BM_StreamingPingPong, TCP, NoOpMutator, NoOpMutator)
 
 // Generate Args for StreamingPingPong benchmarks. Currently generates args for
 // only "small streams" (i.e streams with 0, 1 or 2 messages)
-static void StreamingPingPongAsyncCoalescedArgs(benchmark::internal::Benchmark* b) {
+static void StreamingPingPongAsyncCoalescedArgs(
+    benchmark::internal::Benchmark* b) {
   int msg_size = 0;
 
-  b->Args({0, 0, 0});  // spl case: 0 ping-pong msgs (msg_size doesn't matter here)
-  b->Args({0, 0, 1});  // spl case: 0 ping-pong msgs (msg_size doesn't matter here)
+  b->Args(
+      {0, 0, 0});  // spl case: 0 ping-pong msgs (msg_size doesn't matter here)
+  b->Args(
+      {0, 0, 1});  // spl case: 0 ping-pong msgs (msg_size doesn't matter here)
 
   for (msg_size = 0; msg_size <= 32 * 1024;
        msg_size == 0 ? msg_size++ : msg_size *= 8) {

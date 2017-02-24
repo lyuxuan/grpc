@@ -189,11 +189,12 @@ class ClientAsyncWriter final : public ClientAsyncWriterInterface<W> {
       : context_(context), call_(channel->CreateCall(method, context, cq)) {
     finish_ops_.RecvMessage(response);
     finish_ops_.AllowNoMessage();
-    // if corked bit is set in context, we buffer up the initial metadata to coalesce with later message to be sent
+    // if corked bit is set in context, we buffer up the initial metadata to
+    // coalesce with later message to be sent
     if (context_->initial_metadata_corked_) {
-      write_ops_.SendInitialMetadata(context->send_initial_metadata_, context->initial_metadata_flags());
-    }
-    else {
+      write_ops_.SendInitialMetadata(context->send_initial_metadata_,
+                                     context->initial_metadata_flags());
+    } else {
       init_ops_.set_output_tag(tag);
       init_ops_.SendInitialMetadata(context->send_initial_metadata_,
                                     context->initial_metadata_flags());
@@ -246,7 +247,8 @@ class ClientAsyncWriter final : public ClientAsyncWriterInterface<W> {
   Call call_;
   CallOpSet<CallOpSendInitialMetadata> init_ops_;
   CallOpSet<CallOpRecvInitialMetadata> meta_ops_;
-  CallOpSet<CallOpSendInitialMetadata, CallOpSendMessage, CallOpClientSendClose> write_ops_;
+  CallOpSet<CallOpSendInitialMetadata, CallOpSendMessage, CallOpClientSendClose>
+      write_ops_;
   CallOpSet<CallOpClientSendClose> writes_done_ops_;
   CallOpSet<CallOpRecvInitialMetadata, CallOpGenericRecvMessage,
             CallOpClientRecvStatus>
@@ -275,10 +277,11 @@ class ClientAsyncReaderWriter final
                           void* tag)
       : context_(context), call_(channel->CreateCall(method, context, cq)) {
     if (context_->initial_metadata_corked_) {
-      // if corked bit is set in context, we buffer up the initial metadata to coalesce with later message to be sent
-      write_ops_.SendInitialMetadata(context->send_initial_metadata_, context->initial_metadata_flags());
-    }
-    else {
+      // if corked bit is set in context, we buffer up the initial metadata to
+      // coalesce with later message to be sent
+      write_ops_.SendInitialMetadata(context->send_initial_metadata_,
+                                     context->initial_metadata_flags());
+    } else {
       init_ops_.set_output_tag(tag);
       init_ops_.SendInitialMetadata(context->send_initial_metadata_,
                                     context->initial_metadata_flags());
@@ -341,7 +344,8 @@ class ClientAsyncReaderWriter final
   CallOpSet<CallOpSendInitialMetadata> init_ops_;
   CallOpSet<CallOpRecvInitialMetadata> meta_ops_;
   CallOpSet<CallOpRecvInitialMetadata, CallOpRecvMessage<R>> read_ops_;
-  CallOpSet<CallOpSendInitialMetadata, CallOpSendMessage, CallOpClientSendClose> write_ops_;
+  CallOpSet<CallOpSendInitialMetadata, CallOpSendMessage, CallOpClientSendClose>
+      write_ops_;
   CallOpSet<CallOpRecvInitialMetadata, CallOpClientRecvStatus> finish_ops_;
 };
 
@@ -488,8 +492,8 @@ class ServerAsyncWriter final : public ServerAsyncWriterInterface<W> {
     call_.PerformOps(&write_ops_);
   }
 
-  void WriteAndFinish(const W& msg, WriteOptions options,
-                      const Status& status, void* tag) {
+  void WriteAndFinish(const W& msg, WriteOptions options, const Status& status,
+                      void* tag) {
     write_and_finish_ops_.set_output_tag(tag);
     if (options.is_last_message()) {
       options.set_buffer_hint();
@@ -603,8 +607,8 @@ class ServerAsyncReaderWriter final
     call_.PerformOps(&write_ops_);
   }
 
-  void WriteAndFinish(const W& msg, WriteOptions options,
-                      const Status& status, void* tag) {
+  void WriteAndFinish(const W& msg, WriteOptions options, const Status& status,
+                      void* tag) {
     write_and_finish_ops_.set_output_tag(tag);
     if (!ctx_->sent_initial_metadata_) {
       write_and_finish_ops_.SendInitialMetadata(ctx_->initial_metadata_,
@@ -616,8 +620,8 @@ class ServerAsyncReaderWriter final
     }
     // TODO: how options should be set? assume last_message is already set?
     // if (options.is_last_message()) {
-      options.set_buffer_hint();
-      write_and_finish_ops_.ServerSendStatus(ctx_->trailing_metadata_, status);
+    options.set_buffer_hint();
+    write_and_finish_ops_.ServerSendStatus(ctx_->trailing_metadata_, status);
     // }
     GPR_CODEGEN_ASSERT(write_and_finish_ops_.SendMessage(msg, options).ok());
     call_.PerformOps(&write_and_finish_ops_);
