@@ -102,8 +102,35 @@ class AsyncWriterInterface {
   /// \param[in] tag The tag identifying the operation.
   virtual void Write(const W& msg, void* tag) = 0;
 
+  /// Request the writing of \a msg using WriteOptions \a options with
+  /// identifying tag \a tag.
+  ///
+  /// Only one write may be outstanding at any given time. This means that
+  /// after calling Write, one must wait to receive \a tag from the completion
+  /// queue BEFORE calling Write again.
+  /// WriteOptions \a options is used to set the write options of this message.
+  /// This is thread-safe with respect to \a Read
+  ///
+  /// \param[in] msg The message to be written.
+  /// \param[in] options The WriteOptions to be used to write this message.
+  /// \param[in] tag The tag identifying the operation.
   virtual void Write(const W& msg, WriteOptions options, void* tag) = 0;
 
+  /// Request the writing of \a msg and coalesce it with the writing
+  /// of trailing metadata, using WriteOptions \a options with identifying tag
+  /// \a tag.
+  ///
+  /// For client, WriteLast is equivalent of performing Write and WritesDone in
+  /// a single step.
+  /// For server, WriteLast buffers up the \a msg. The writing of \a msg is held
+  /// until Finish is called, where \a msg and trailing metadata are coalesced
+  /// and write is initiated. Note that WriteLast can only buffer \a msg up to
+  /// the flow control window size. If \a msg size is larger than the window
+  /// size, it will be sent on wire without buffering.
+  ///
+  /// \param[in] msg The message to be written.
+  /// \param[in] options The WriteOptions to be used to write this message.
+  /// \param[in] tag The tag identifying the operation.
   void WriteLast(const W& msg, WriteOptions options, void* tag) {
     Write(msg, options.set_last_message(), tag);
   }
@@ -190,7 +217,7 @@ class ClientAsyncWriter final : public ClientAsyncWriterInterface<W> {
     finish_ops_.RecvMessage(response);
     finish_ops_.AllowNoMessage();
     // if corked bit is set in context, we buffer up the initial metadata to
-    // coalesce with later message to be sent
+    // coalesce with later message to be sent. No op is performed.
     if (context_->initial_metadata_corked_) {
       write_ops_.SendInitialMetadata(context->send_initial_metadata_,
                                      context->initial_metadata_flags());
@@ -223,6 +250,7 @@ class ClientAsyncWriter final : public ClientAsyncWriterInterface<W> {
       options.set_buffer_hint();
       write_ops_.ClientSendClose();
     }
+    // TODO(ctiller): don't assert
     GPR_CODEGEN_ASSERT(write_ops_.SendMessage(msg, options).ok());
     call_.PerformOps(&write_ops_);
   }
@@ -278,7 +306,7 @@ class ClientAsyncReaderWriter final
       : context_(context), call_(channel->CreateCall(method, context, cq)) {
     if (context_->initial_metadata_corked_) {
       // if corked bit is set in context, we buffer up the initial metadata to
-      // coalesce with later message to be sent
+      // coalesce with later message to be sent. No op is performed.
       write_ops_.SendInitialMetadata(context->send_initial_metadata_,
                                      context->initial_metadata_flags());
     } else {
@@ -319,6 +347,7 @@ class ClientAsyncReaderWriter final
       options.set_buffer_hint();
       write_ops_.ClientSendClose();
     }
+    // TODO(ctiller): don't assert
     GPR_CODEGEN_ASSERT(write_ops_.SendMessage(msg, options).ok());
     call_.PerformOps(&write_ops_);
   }
@@ -436,6 +465,17 @@ class ServerAsyncWriterInterface : public ServerAsyncStreamingInterface,
  public:
   virtual void Finish(const Status& status, void* tag) = 0;
 
+  /// Request the writing of \a msg and coalesce it with trailing metadata which
+  /// contains \a status, using WriteOptions options with identifying tag \a
+  /// tag.
+  ///
+  /// WriteAndFinish is equivalent of performing WriteLast and Finish in a
+  /// single step.
+  ///
+  /// \param[in] msg The message to be written.
+  /// \param[in] options The WriteOptions to be used to write this message.
+  /// \param[in] status The Status that server returns to client.
+  /// \param[in] tag The tag identifying the operation.
   virtual void WriteAndFinish(const W& msg, WriteOptions options,
                               const Status& status, void* tag) = 0;
 };
@@ -474,7 +514,7 @@ class ServerAsyncWriter final : public ServerAsyncWriterInterface<W> {
     call_.PerformOps(&write_ops_);
   }
 
-  void Write(const W& msg, WriteOptions options, void* tag) {
+  void Write(const W& msg, WriteOptions options, void* tag) override {
     write_ops_.set_output_tag(tag);
     if (options.is_last_message()) {
       options.set_buffer_hint();
@@ -488,27 +528,28 @@ class ServerAsyncWriter final : public ServerAsyncWriterInterface<W> {
       }
       ctx_->sent_initial_metadata_ = true;
     }
+    // TODO(ctiller): don't assert
     GPR_CODEGEN_ASSERT(write_ops_.SendMessage(msg, options).ok());
     call_.PerformOps(&write_ops_);
   }
 
   void WriteAndFinish(const W& msg, WriteOptions options, const Status& status,
-                      void* tag) {
-    write_and_finish_ops_.set_output_tag(tag);
+                      void* tag) override {
+    write_ops_.set_output_tag(tag);
     if (options.is_last_message()) {
       options.set_buffer_hint();
-      finish_ops_.ServerSendStatus(ctx_->trailing_metadata_, status);
+      write_ops_.ServerSendStatus(ctx_->trailing_metadata_, status);
     }
     if (!ctx_->sent_initial_metadata_) {
-      write_and_finish_ops_.SendInitialMetadata(ctx_->initial_metadata_,
-                                                ctx_->initial_metadata_flags());
+      write_ops_.SendInitialMetadata(ctx_->initial_metadata_,
+                                     ctx_->initial_metadata_flags());
       if (ctx_->compression_level_set()) {
-        write_and_finish_ops_.set_compression_level(ctx_->compression_level());
+        write_ops_.set_compression_level(ctx_->compression_level());
       }
       ctx_->sent_initial_metadata_ = true;
     }
-    GPR_CODEGEN_ASSERT(write_and_finish_ops_.SendMessage(msg, options).ok());
-    call_.PerformOps(&write_and_finish_ops_);
+    GPR_CODEGEN_ASSERT(write_ops_.SendMessage(msg, options).ok());
+    call_.PerformOps(&write_ops_);
   }
 
   void Finish(const Status& status, void* tag) override {
@@ -531,10 +572,9 @@ class ServerAsyncWriter final : public ServerAsyncWriterInterface<W> {
   Call call_;
   ServerContext* ctx_;
   CallOpSet<CallOpSendInitialMetadata> meta_ops_;
-  CallOpSet<CallOpSendInitialMetadata, CallOpSendMessage> write_ops_;
   CallOpSet<CallOpSendInitialMetadata, CallOpSendMessage,
             CallOpServerSendStatus>
-      write_and_finish_ops_;
+      write_ops_;
   CallOpSet<CallOpSendInitialMetadata, CallOpServerSendStatus> finish_ops_;
 };
 
@@ -545,6 +585,18 @@ class ServerAsyncReaderWriterInterface : public ServerAsyncStreamingInterface,
                                          public AsyncReaderInterface<R> {
  public:
   virtual void Finish(const Status& status, void* tag) = 0;
+
+  /// Request the writing of \a msg and coalesce it with trailing metadata which
+  /// contains \a status, using WriteOptions options with identifying tag \a
+  /// tag.
+  ///
+  /// WriteAndFinish is equivalent of performing WriteLast and Finish in a
+  /// single step.
+  ///
+  /// \param[in] msg The message to be written.
+  /// \param[in] options The WriteOptions to be used to write this message.
+  /// \param[in] status The Status that server returns to client.
+  /// \param[in] tag The tag identifying the operation.
   virtual void WriteAndFinish(const W& msg, WriteOptions options,
                               const Status& status, void* tag) = 0;
 };
@@ -590,7 +642,7 @@ class ServerAsyncReaderWriter final
     call_.PerformOps(&write_ops_);
   }
 
-  void Write(const W& msg, WriteOptions options, void* tag) {
+  void Write(const W& msg, WriteOptions options, void* tag) override {
     write_ops_.set_output_tag(tag);
     if (options.is_last_message()) {
       options.set_buffer_hint();
@@ -608,23 +660,20 @@ class ServerAsyncReaderWriter final
   }
 
   void WriteAndFinish(const W& msg, WriteOptions options, const Status& status,
-                      void* tag) {
-    write_and_finish_ops_.set_output_tag(tag);
+                      void* tag) override {
+    write_ops_.set_output_tag(tag);
     if (!ctx_->sent_initial_metadata_) {
-      write_and_finish_ops_.SendInitialMetadata(ctx_->initial_metadata_,
-                                                ctx_->initial_metadata_flags());
+      write_ops_.SendInitialMetadata(ctx_->initial_metadata_,
+                                     ctx_->initial_metadata_flags());
       if (ctx_->compression_level_set()) {
-        write_and_finish_ops_.set_compression_level(ctx_->compression_level());
+        write_ops_.set_compression_level(ctx_->compression_level());
       }
       ctx_->sent_initial_metadata_ = true;
     }
-    // TODO: how options should be set? assume last_message is already set?
-    // if (options.is_last_message()) {
     options.set_buffer_hint();
-    write_and_finish_ops_.ServerSendStatus(ctx_->trailing_metadata_, status);
-    // }
-    GPR_CODEGEN_ASSERT(write_and_finish_ops_.SendMessage(msg, options).ok());
-    call_.PerformOps(&write_and_finish_ops_);
+    GPR_CODEGEN_ASSERT(write_ops_.SendMessage(msg, options).ok());
+    write_ops_.ServerSendStatus(ctx_->trailing_metadata_, status);
+    call_.PerformOps(&write_ops_);
   }
 
   void Finish(const Status& status, void* tag) override {
@@ -650,10 +699,9 @@ class ServerAsyncReaderWriter final
   ServerContext* ctx_;
   CallOpSet<CallOpSendInitialMetadata> meta_ops_;
   CallOpSet<CallOpRecvMessage<R>> read_ops_;
-  CallOpSet<CallOpSendInitialMetadata, CallOpSendMessage> write_ops_;
   CallOpSet<CallOpSendInitialMetadata, CallOpSendMessage,
             CallOpServerSendStatus>
-      write_and_finish_ops_;
+      write_ops_;
   CallOpSet<CallOpSendInitialMetadata, CallOpServerSendStatus> finish_ops_;
 };
 

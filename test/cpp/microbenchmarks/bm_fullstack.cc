@@ -1336,7 +1336,7 @@ static void StreamingPingPongAsyncCoalescedArgs(
   b->Args(
       {0, 0, 1});  // spl case: 0 ping-pong msgs (msg_size doesn't matter here)
 
-  for (msg_size = 0; msg_size <= 32 * 1024;
+  for (msg_size = 0; msg_size <= 128 * 1024 * 1024;
        msg_size == 0 ? msg_size++ : msg_size *= 8) {
     b->Args({msg_size, 1, 0});
     b->Args({msg_size, 2, 0});
@@ -1356,7 +1356,7 @@ static void StreamingPingPongCorkedApiArgs(benchmark::internal::Benchmark* b) {
 
   b->Args({0, 0});  // spl case: 0 ping-pong msgs (msg_size doesn't matter here)
 
-  for (msg_size = 0; msg_size <= 32 * 1024;
+  for (msg_size = 0; msg_size <= 128 * 1024 * 1024;
        msg_size == 0 ? msg_size++ : msg_size *= 8) {
     b->Args({msg_size, 1});
     b->Args({msg_size, 2});
