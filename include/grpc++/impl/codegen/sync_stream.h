@@ -123,7 +123,7 @@ class WriterInterface {
   /// For client, WriteLast is equivalent of performing Write and WritesDone in
   /// a single step. \a msg and trailing metadata are coalesced and sent on wire
   /// by calling this function.
-  /// For server, WriteLast buffers up the \a msg. The writing of \a msg is held
+  /// For server, WriteLast buffers the \a msg. The writing of \a msg is held
   /// until the service handler returns, where \a msg and trailing metadata are
   /// coalesced and sent on wire. Note that WriteLast can only buffer \a msg up
   /// to the flow control window size. If \a msg size is larger than the window
@@ -452,7 +452,7 @@ class ServerReader final : public ServerReaderInterface<R> {
   }
 
   bool NextMessageSize(uint32_t* sz) override {
-    *sz = call_.max_receive_message_size();
+    *sz = call_->max_receive_message_size();
     return true;
   }
 
@@ -547,7 +547,7 @@ class ServerReaderWriterBody final {
   }
 
   bool NextMessageSize(uint32_t* sz) {
-    *sz = call_.max_receive_message_size();
+    *sz = call_->max_receive_message_size();
     return true;
   }
 

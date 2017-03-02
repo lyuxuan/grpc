@@ -157,10 +157,9 @@ class WriteOptions {
 
   /// last-message bit: indicates this is the last message in a stream
   /// client-side:  makes Write the equivalent of performing Write, WritesDone
-  /// in
-  ///               a single step
+  /// in a single step
   /// server-side:  hold the Write until the service handler returns (sync api)
-  ///               or until Finish is called (async api)
+  /// or until Finish is called (async api)
   ///
   /// \sa GRPC_WRITE_LAST_MESSAGE
   inline WriteOptions& set_last_message() {
@@ -177,8 +176,8 @@ class WriteOptions {
     return *this;
   }
 
-  /// Get value for the flag indicating that this is the last message, and  is
-  /// coalesced.
+  /// Get value for the flag indicating that this is the last message, and
+  /// should be coalesced with trailing metadata.
   ///
   /// \sa GRPC_WRITE_LAST_MESSAGE
   bool is_last_message() const { return GetBit(GRPC_WRITE_LAST_MESSAGE); }

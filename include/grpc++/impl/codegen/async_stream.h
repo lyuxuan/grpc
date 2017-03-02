@@ -122,7 +122,7 @@ class AsyncWriterInterface {
   ///
   /// For client, WriteLast is equivalent of performing Write and WritesDone in
   /// a single step.
-  /// For server, WriteLast buffers up the \a msg. The writing of \a msg is held
+  /// For server, WriteLast buffers the \a msg. The writing of \a msg is held
   /// until Finish is called, where \a msg and trailing metadata are coalesced
   /// and write is initiated. Note that WriteLast can only buffer \a msg up to
   /// the flow control window size. If \a msg size is larger than the window

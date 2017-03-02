@@ -281,8 +281,13 @@ class ClientContext {
   /// \param algorithm The compression algorithm used for the client call.
   void set_compression_algorithm(grpc_compression_algorithm algorithm);
 
-  /// Flag that metadata should be corked (and not sent until the first message
-  /// is sent)
+  /// Flag whether the initial metadata should be \a corked
+  ///
+  /// If \a corked is true, then the initial metadata will be colasced with the
+  /// write of first message in the stream.
+  ///
+  /// \param corked The flag indicating whether the initial metadata is to be
+  /// corked or not.
   void sent_initial_metadata_corked(bool corked);
 
   /// Return the peer uri in a string.
