@@ -1421,11 +1421,53 @@ static grpc_call_error queue_call_request(grpc_exec_ctx *exec_ctx,
   return GRPC_CALL_OK;
 }
 
+// grpc_call_error grpc_server_request_call(
+//     grpc_server *server, grpc_call **call, grpc_call_details *details,
+//     grpc_metadata_array *initial_metadata,
+//     grpc_completion_queue *cq_bound_to_call,
+//     grpc_completion_queue *cq_for_notification, void *tag) {
+//   grpc_call_error error;
+//   grpc_exec_ctx exec_ctx = GRPC_EXEC_CTX_INIT;
+//   requested_call *rc = gpr_malloc(sizeof(*rc));
+//   GRPC_API_TRACE(
+//       "grpc_server_request_call("
+//       "server=%p, call=%p, details=%p, initial_metadata=%p, "
+//       "cq_bound_to_call=%p, cq_for_notification=%p, tag=%p)",
+//       7, (server, call, details, initial_metadata, cq_bound_to_call,
+//           cq_for_notification, tag));
+//   size_t cq_idx;
+//   for (cq_idx = 0; cq_idx < server->cq_count; cq_idx++) {
+//     if (server->cqs[cq_idx] == cq_for_notification) {
+//       break;
+//     }
+//   }
+//   if (cq_idx == server->cq_count) {
+//     gpr_free(rc);
+//     error = GRPC_CALL_ERROR_NOT_SERVER_COMPLETION_QUEUE;
+//     goto done;
+//   }
+//   grpc_cq_begin_op(cq_for_notification, tag);
+//   details->reserved = NULL;
+//   rc->cq_idx = cq_idx;
+//   rc->type = BATCH_CALL;
+//   rc->server = server;
+//   rc->tag = tag;
+//   rc->cq_bound_to_call = cq_bound_to_call;
+//   rc->call = call;
+//   rc->data.batch.details = details;
+//   rc->initial_metadata = initial_metadata;
+//   error = queue_call_request(&exec_ctx, server, cq_idx, rc);
+// done:
+//   grpc_exec_ctx_finish(&exec_ctx);
+//   return error;
+// }
+
 grpc_call_error grpc_server_request_call(
     grpc_server *server, grpc_call **call, grpc_call_details *details,
     grpc_metadata_array *initial_metadata,
     grpc_completion_queue *cq_bound_to_call,
-    grpc_completion_queue *cq_for_notification, void *tag) {
+    grpc_completion_queue *cq_for_notification, void *tag, bool recv_close,
+    void *recv_close_tag) {
   grpc_call_error error;
   grpc_exec_ctx exec_ctx = GRPC_EXEC_CTX_INIT;
   requested_call *rc = gpr_malloc(sizeof(*rc));
@@ -1462,11 +1504,64 @@ done:
   return error;
 }
 
+// grpc_call_error grpc_server_request_registered_call(
+//     grpc_server *server, void *rmp, grpc_call **call, gpr_timespec *deadline,
+//     grpc_metadata_array *initial_metadata, grpc_byte_buffer
+//     **optional_payload,
+//     grpc_completion_queue *cq_bound_to_call,
+//     grpc_completion_queue *cq_for_notification, void *tag) {
+//   grpc_call_error error;
+//   grpc_exec_ctx exec_ctx = GRPC_EXEC_CTX_INIT;
+//   requested_call *rc = gpr_malloc(sizeof(*rc));
+//   registered_method *rm = rmp;
+//   GRPC_API_TRACE(
+//       "grpc_server_request_registered_call("
+//       "server=%p, rmp=%p, call=%p, deadline=%p, initial_metadata=%p, "
+//       "optional_payload=%p, cq_bound_to_call=%p, cq_for_notification=%p, "
+//       "tag=%p)",
+//       9, (server, rmp, call, deadline, initial_metadata, optional_payload,
+//           cq_bound_to_call, cq_for_notification, tag));
+//
+//   size_t cq_idx;
+//   for (cq_idx = 0; cq_idx < server->cq_count; cq_idx++) {
+//     if (server->cqs[cq_idx] == cq_for_notification) {
+//       break;
+//     }
+//   }
+//   if (cq_idx == server->cq_count) {
+//     gpr_free(rc);
+//     error = GRPC_CALL_ERROR_NOT_SERVER_COMPLETION_QUEUE;
+//     goto done;
+//   }
+//   if ((optional_payload == NULL) !=
+//       (rm->payload_handling == GRPC_SRM_PAYLOAD_NONE)) {
+//     gpr_free(rc);
+//     error = GRPC_CALL_ERROR_PAYLOAD_TYPE_MISMATCH;
+//     goto done;
+//   }
+//   grpc_cq_begin_op(cq_for_notification, tag);
+//   rc->cq_idx = cq_idx;
+//   rc->type = REGISTERED_CALL;
+//   rc->server = server;
+//   rc->tag = tag;
+//   rc->cq_bound_to_call = cq_bound_to_call;
+//   rc->call = call;
+//   rc->data.registered.registered_method = rm;
+//   rc->data.registered.deadline = deadline;
+//   rc->initial_metadata = initial_metadata;
+//   rc->data.registered.optional_payload = optional_payload;
+//   error = queue_call_request(&exec_ctx, server, cq_idx, rc);
+// done:
+//   grpc_exec_ctx_finish(&exec_ctx);
+//   return error;
+// }
+
 grpc_call_error grpc_server_request_registered_call(
     grpc_server *server, void *rmp, grpc_call **call, gpr_timespec *deadline,
     grpc_metadata_array *initial_metadata, grpc_byte_buffer **optional_payload,
     grpc_completion_queue *cq_bound_to_call,
-    grpc_completion_queue *cq_for_notification, void *tag) {
+    grpc_completion_queue *cq_for_notification, void *tag, bool recv_close,
+    void *recv_close_tag) {
   grpc_call_error error;
   grpc_exec_ctx exec_ctx = GRPC_EXEC_CTX_INIT;
   requested_call *rc = gpr_malloc(sizeof(*rc));
@@ -1512,7 +1607,6 @@ done:
   grpc_exec_ctx_finish(&exec_ctx);
   return error;
 }
-
 static void fail_call(grpc_exec_ctx *exec_ctx, grpc_server *server,
                       size_t cq_idx, requested_call *rc, grpc_error *error) {
   *rc->call = NULL;
