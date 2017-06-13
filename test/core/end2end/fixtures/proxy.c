@@ -400,7 +400,7 @@ static void request_call(grpc_end2end_proxy *proxy) {
                                  proxy->server, &proxy->new_call,
                                  &proxy->new_call_details,
                                  &proxy->new_call_metadata, proxy->cq,
-                                 proxy->cq, new_closure(on_new_call, proxy)));
+                                 proxy->cq, new_closure(on_new_call, proxy), false, NULL));
 }
 
 static void thread_main(void *arg) {
