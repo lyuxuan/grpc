@@ -221,7 +221,7 @@ class ServerContext {
   /// IsCancelled() can then be called to check whether the rpc was cancelled.
   void AsyncNotifyWhenDone(void* tag) {
     has_notify_when_done_tag_ = true;
-    async_notify_when_done_tag_ = tag;
+    async_notify_when_done_tag_ = new AsyncNotifyWhenDoneTag(tag);
   }
 
   /// Should be used for framework-level extensions only.
@@ -264,6 +264,18 @@ class ServerContext {
 
   class CompletionOp;
 
+  class AsyncNotifyWhenDoneTag final : public CompletionQueueTag {
+   public:
+    AsyncNotifyWhenDoneTag(void* tag) : tag_(tag){};
+    bool FinalizeResult(void** tag, bool* status) override {
+      *tag = tag_;
+      return true;
+    }
+
+   private:
+    void* const tag_;
+  };
+
   void BeginCompletionOp(internal::Call* call);
   /// Return the tag queued by BeginCompletionOp()
   internal::CompletionQueueTag* GetCompletionOpTag();
@@ -276,7 +288,7 @@ class ServerContext {
 
   CompletionOp* completion_op_;
   bool has_notify_when_done_tag_;
-  void* async_notify_when_done_tag_;
+  AsyncNotifyWhenDoneTag* async_notify_when_done_tag_;
 
   gpr_timespec deadline_;
   grpc_call* call_;

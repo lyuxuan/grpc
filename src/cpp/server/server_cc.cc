@@ -162,10 +162,10 @@ class Server::SyncRequest final : public internal::CompletionQueueTag {
         call_details_ = new grpc_call_details;
         grpc_call_details_init(call_details_);
       }
-      GPR_ASSERT(GRPC_CALL_OK == grpc_server_request_call(
-                                     server, &call_, call_details_,
-                                     &request_metadata_, cq_, notify_cq, this,
-                                     false, nullptr));
+      GPR_ASSERT(GRPC_CALL_OK ==
+                 grpc_server_request_call(server, &call_, call_details_,
+                                          &request_metadata_, cq_, notify_cq,
+                                          this, false, nullptr));
     }
   }
 
@@ -661,8 +661,7 @@ void ServerInterface::RegisteredAsyncRequest::IssueRequest(
   grpc_server_request_registered_call(
       server_->server(), registered_method, &call_, &context_->deadline_,
       context_->client_metadata_.arr(), payload, call_cq_->cq(),
-      notification_cq->cq(), this,
-      context_->has_notify_when_done_tag_,
+      notification_cq->cq(), this, context_->has_notify_when_done_tag_,
       context_->async_notify_when_done_tag_);
 }
 

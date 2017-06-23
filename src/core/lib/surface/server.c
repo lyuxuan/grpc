@@ -70,6 +70,9 @@ typedef struct requested_call {
   grpc_call **call;
   grpc_cq_completion completion;
   grpc_metadata_array *initial_metadata;
+  bool recv_close;
+  void *recv_close_tag;
+  grpc_cq_completion recv_close_completion;
   union {
     struct {
       grpc_call_details *details;
@@ -1116,9 +1119,10 @@ void grpc_server_start(grpc_server *server) {
 
   server_ref(server);
   server->starting = true;
-  GRPC_CLOSURE_SCHED(&exec_ctx, GRPC_CLOSURE_CREATE(start_listeners, server,
-                                                    grpc_executor_scheduler),
-                     GRPC_ERROR_NONE);
+  GRPC_CLOSURE_SCHED(
+      &exec_ctx,
+      GRPC_CLOSURE_CREATE(start_listeners, server, grpc_executor_scheduler),
+      GRPC_ERROR_NONE);
 
   grpc_exec_ctx_finish(&exec_ctx);
 }
@@ -1364,7 +1368,13 @@ static grpc_call_error queue_call_request(grpc_exec_ctx *exec_ctx,
                                           requested_call *rc) {
   call_data *calld = NULL;
   request_matcher *rm = NULL;
+<<<<<<< HEAD
   int request_id;
+=======
+  if (rc->recv_close) {
+    grpc_cq_begin_op(server->cqs[cq_idx], rc->recv_close_tag);
+  }
+>>>>>>> make shutdown test pass
   if (gpr_atm_acq_load(&server->shutdown_flag)) {
     fail_call(exec_ctx, server, cq_idx, rc,
               GRPC_ERROR_CREATE_FROM_STATIC_STRING("Server Shutdown"));
@@ -1474,9 +1484,11 @@ grpc_call_error grpc_server_request_call(
   GRPC_API_TRACE(
       "grpc_server_request_call("
       "server=%p, call=%p, details=%p, initial_metadata=%p, "
-      "cq_bound_to_call=%p, cq_for_notification=%p, tag=%p)",
-      7, (server, call, details, initial_metadata, cq_bound_to_call,
-          cq_for_notification, tag));
+      "cq_bound_to_call=%p, cq_for_notification=%p, tag=%p, recv_close=%d, "
+      "recv_close_tag=%p)",
+      9,
+      (server, call, details, initial_metadata, cq_bound_to_call,
+       cq_for_notification, tag, recv_close, recv_close_tag));
   size_t cq_idx;
   for (cq_idx = 0; cq_idx < server->cq_count; cq_idx++) {
     if (server->cqs[cq_idx] == cq_for_notification) {
@@ -1498,6 +1510,8 @@ grpc_call_error grpc_server_request_call(
   rc->call = call;
   rc->data.batch.details = details;
   rc->initial_metadata = initial_metadata;
+  rc->recv_close = recv_close;
+  rc->recv_close_tag = recv_close_tag;
   error = queue_call_request(&exec_ctx, server, cq_idx, rc);
 done:
   grpc_exec_ctx_finish(&exec_ctx);
@@ -1570,9 +1584,10 @@ grpc_call_error grpc_server_request_registered_call(
       "grpc_server_request_registered_call("
       "server=%p, rmp=%p, call=%p, deadline=%p, initial_metadata=%p, "
       "optional_payload=%p, cq_bound_to_call=%p, cq_for_notification=%p, "
-      "tag=%p)",
-      9, (server, rmp, call, deadline, initial_metadata, optional_payload,
-          cq_bound_to_call, cq_for_notification, tag));
+      "tag=%p, recv_close=%d, recv_close_tag=%p)",
+      11,
+      (server, rmp, call, deadline, initial_metadata, optional_payload,
+       cq_bound_to_call, cq_for_notification, tag, recv_close, recv_close_tag));
 
   size_t cq_idx;
   for (cq_idx = 0; cq_idx < server->cq_count; cq_idx++) {
@@ -1602,11 +1617,17 @@ grpc_call_error grpc_server_request_registered_call(
   rc->data.registered.deadline = deadline;
   rc->initial_metadata = initial_metadata;
   rc->data.registered.optional_payload = optional_payload;
+  rc->recv_close = recv_close;
+  rc->recv_close_tag = recv_close_tag;
   error = queue_call_request(&exec_ctx, server, cq_idx, rc);
 done:
   grpc_exec_ctx_finish(&exec_ctx);
   return error;
 }
+
+static void done_request_event_dup(grpc_exec_ctx *exec_ctx, void *req,
+                                   grpc_cq_completion *c) {}
+
 static void fail_call(grpc_exec_ctx *exec_ctx, grpc_server *server,
                       size_t cq_idx, requested_call *rc, grpc_error *error) {
   *rc->call = NULL;
@@ -1616,6 +1637,10 @@ static void fail_call(grpc_exec_ctx *exec_ctx, grpc_server *server,
   server_ref(server);
   grpc_cq_end_op(exec_ctx, server->cqs[cq_idx], rc->tag, error,
                  done_request_event, rc, &rc->completion);
+  if (rc->recv_close) {
+    grpc_cq_end_op(exec_ctx, server->cqs[cq_idx], rc->recv_close_tag, error,
+                   done_request_event_dup, rc, &rc->recv_close_completion);
+  }
 }
 
 const grpc_channel_args *grpc_server_get_channel_args(grpc_server *server) {
