@@ -29,9 +29,15 @@
 
 licenses(["notice"])  # 3-clause BSD
 
-load("//bazel:grpc_build_system.bzl", "grpc_cc_library", "grpc_cc_binary")
+load("//bazel:grpc_build_system.bzl", "grpc_cc_library", "grpc_cc_binary", "grpc_cc_test")
 
-package(default_visibility = ["//visibility:public"])
+package(
+    default_visibility = ["//visibility:public"],
+    features = [
+        "-layering_check",
+        "-parse_headers",
+    ],
+)
 
 # The following builds a shared-object to confirm that grpc++_unsecure
 # builds properly. Build-only is sufficient here
@@ -141,19 +147,21 @@ grpc_cc_library(
     ],
 )
 
-cc_test(
+grpc_cc_test(
     name = "error_details_test",
     srcs = [
         "error_details_test.cc",
     ],
     deps = [
         "//:grpc++_error_details",
-        "//external:gtest",
         "//src/proto/grpc/testing:echo_messages_proto",
+    ],
+    external_deps = [
+        "gtest",
     ],
 )
 
-cc_binary(
+grpc_cc_binary(
     name = "grpc_cli",
     srcs = [
         "cli_call.cc",
@@ -175,7 +183,9 @@ cc_binary(
     ],
     deps = [
         "//:grpc++",
-        "//external:gflags",
         "//src/proto/grpc/reflection/v1alpha:reflection_proto",
+    ],
+    external_deps = [
+        "gflags",
     ],
 )
