@@ -512,6 +512,13 @@ static void publish_call(grpc_exec_ctx *exec_ctx, grpc_server *server,
   server_ref(chand->server);
   grpc_cq_end_op(exec_ctx, calld->cq_new, rc->tag, GRPC_ERROR_NONE,
                  done_request_event, rc, &rc->completion);
+  // grpc_op close_op;
+  // memset(&close_op, 0, sizeof(close_op));
+  // close_op.op = GRPC_OP_RECV_CLOSE_ON_SERVER;
+  // close_op.data.recv_close_on_server.cancelled = &cancelled_;
+  // close_op.flags = 0;
+  // close_op.reserved = NULL;
+  // grpc_call_start_batch(call, &close_op, 1, void *tag, void *reserved);
 }
 
 static void publish_new_rpc(grpc_exec_ctx *exec_ctx, void *arg,
