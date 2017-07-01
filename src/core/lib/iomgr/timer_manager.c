@@ -78,10 +78,10 @@ static void start_timer_thread_and_unlock(void) {
   if (GRPC_TRACER_ON(grpc_timer_check_trace)) {
     gpr_log(GPR_DEBUG, "Spawn timer thread");
   }
-  gpr_thd_id thd;
   gpr_thd_options opt = gpr_thd_options_default();
   gpr_thd_options_set_joinable(&opt);
-  gpr_thd_new(&thd, timer_thread, NULL, &opt);
+  completed_thread *ct = gpr_malloc(sizeof(*ct));
+  gpr_thd_new(&ct->t, timer_thread, ct, &opt);
 }
 
 void grpc_timer_manager_tick() {
