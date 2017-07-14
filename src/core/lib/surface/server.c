@@ -1375,13 +1375,10 @@ static grpc_call_error queue_call_request(grpc_exec_ctx *exec_ctx,
                                           requested_call *rc) {
   call_data *calld = NULL;
   request_matcher *rm = NULL;
-<<<<<<< HEAD
   int request_id;
-=======
   if (rc->recv_close) {
     grpc_cq_begin_op(server->cqs[cq_idx], rc->recv_close_tag);
   }
->>>>>>> make shutdown test pass
   if (gpr_atm_acq_load(&server->shutdown_flag)) {
     fail_call(exec_ctx, server, cq_idx, rc,
               GRPC_ERROR_CREATE_FROM_STATIC_STRING("Server Shutdown"));
