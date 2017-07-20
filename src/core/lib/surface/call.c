@@ -226,6 +226,8 @@ struct grpc_call {
     } server;
   } final_op;
 
+  int cancelled;
+  bool recv_close_done;
   void *saved_receiving_stream_ready_bctlp;
 };
 
@@ -442,6 +444,14 @@ grpc_error *grpc_call_create(grpc_exec_ctx *exec_ctx,
 
   GPR_TIMER_END("grpc_call_create", 0);
   return error;
+}
+
+bool grpc_call_get_cancelled(grpc_call *call) {
+  return /*call->recv_close_done ?*/ call->cancelled != 0 /*: false*/;
+}
+
+int *grpc_call_get_cancelled_ptr(grpc_call *call) {
+  return &call->cancelled;
 }
 
 void grpc_call_set_completion_queue(grpc_exec_ctx *exec_ctx, grpc_call *call,

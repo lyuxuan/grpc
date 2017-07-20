@@ -49,7 +49,6 @@ class ServerContext::CompletionOp final : public internal::CallOpSetInterface {
 
   void FillOps(grpc_call* call, grpc_op* ops, size_t* nops) override;
   bool FinalizeResult(void** tag, bool* status) override;
-
   bool CheckCancelled(CompletionQueue* cq) {
     cq->TryPluck(this);
     return CheckCancelledNoPluck();
@@ -66,7 +65,7 @@ class ServerContext::CompletionOp final : public internal::CallOpSetInterface {
  private:
   bool CheckCancelledNoPluck() {
     std::lock_guard<std::mutex> g(mu_);
-    return finalized_ ? (cancelled_ != 0) : false;
+   return finalized_ ? (cancelled_ != 0) : false;
   }
 
   bool has_tag_;
@@ -113,26 +112,25 @@ bool ServerContext::CompletionOp::FinalizeResult(void** tag, bool* status) {
 // ServerContext body
 
 ServerContext::ServerContext()
-    : completion_op_(nullptr),
-      has_notify_when_done_tag_(false),
-      async_notify_when_done_tag_(nullptr),
+    : has_notify_when_done_tag_(false),
       deadline_(gpr_inf_future(GPR_CLOCK_REALTIME)),
       call_(nullptr),
       cq_(nullptr),
       sent_initial_metadata_(false),
       compression_level_set_(false),
-      has_pending_ops_(false) {}
+      has_pending_ops_(false) {
+  completion_op_ = new CompletionOp();
+}
 
 ServerContext::ServerContext(gpr_timespec deadline, grpc_metadata_array* arr)
-    : completion_op_(nullptr),
-      has_notify_when_done_tag_(false),
-      async_notify_when_done_tag_(nullptr),
+    : has_notify_when_done_tag_(false),
       deadline_(deadline),
       call_(nullptr),
       cq_(nullptr),
       sent_initial_metadata_(false),
       compression_level_set_(false),
       has_pending_ops_(false) {
+  completion_op_ = new CompletionOp();
   std::swap(*client_metadata_.arr(), *arr);
   client_metadata_.FillMap();
 }
@@ -147,12 +145,12 @@ ServerContext::~ServerContext() {
 }
 
 void ServerContext::BeginCompletionOp(internal::Call* call) {
-  GPR_ASSERT(!completion_op_);
-  completion_op_ = new CompletionOp();
-  if (has_notify_when_done_tag_) {
-    completion_op_->set_tag(async_notify_when_done_tag_);
-  }
-  call->PerformOps(completion_op_);
+  // GPR_ASSERT(!completion_op_);
+  // completion_op_ = new CompletionOp();
+  // if (has_notify_when_done_tag_) {
+  //   completion_op_->set_tag(async_notify_when_done_tag_);
+  // }
+  // call->PerformOps(completion_op_);
 }
 
 internal::CompletionQueueTag* ServerContext::GetCompletionOpTag() {
@@ -178,14 +176,20 @@ void ServerContext::TryCancel() const {
 }
 
 bool ServerContext::IsCancelled() const {
-  if (has_notify_when_done_tag_) {
-    // when using async API, but the result is only valid
-    // if the tag has already been delivered at the completion queue
-    return completion_op_ && completion_op_->CheckCancelledAsync();
-  } else {
-    // when using sync API
-    return completion_op_ && completion_op_->CheckCancelled(cq_);
-  }
+  // if (has_notify_when_done_tag_) {
+  //   // when using async API, but the result is only valid
+  //   // if the tag has already been delivered at the completion queue
+  //   return completion_op_ && completion_op_->CheckCancelledAsync();
+  // } else {
+  //   // when using sync API
+  //   return completion_op_ && completion_op_->CheckCancelled(cq_);
+  // }
+  return grpc_call_get_cancelled(call_);
+}
+
+void ServerContext::AsyncNotifyWhenDone(void* tag) {
+  has_notify_when_done_tag_ = true;
+  completion_op_->set_tag(tag);
 }
 
 void ServerContext::set_compression_algorithm(

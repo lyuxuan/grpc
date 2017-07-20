@@ -658,11 +658,18 @@ ServerInterface::RegisteredAsyncRequest::RegisteredAsyncRequest(
 void ServerInterface::RegisteredAsyncRequest::IssueRequest(
     void* registered_method, grpc_byte_buffer** payload,
     ServerCompletionQueue* notification_cq) {
-  grpc_server_request_registered_call(
-      server_->server(), registered_method, &call_, &context_->deadline_,
-      context_->client_metadata_.arr(), payload, call_cq_->cq(),
-      notification_cq->cq(), this, context_->has_notify_when_done_tag_,
-      context_->async_notify_when_done_tag_);
+  if (context_->has_notify_when_done_tag_) {
+    grpc_server_request_registered_call(
+        server_->server(), registered_method, &call_, &context_->deadline_,
+        context_->client_metadata_.arr(), payload, call_cq_->cq(),
+        notification_cq->cq(), this, context_->has_notify_when_done_tag_,
+        context_->completion_op_);
+  } else {
+    grpc_server_request_registered_call(
+        server_->server(), registered_method, &call_, &context_->deadline_,
+        context_->client_metadata_.arr(), payload, call_cq_->cq(),
+        notification_cq->cq(), this, false, nullptr);
+  }
 }
 
 ServerInterface::GenericAsyncRequest::GenericAsyncRequest(
@@ -674,10 +681,16 @@ ServerInterface::GenericAsyncRequest::GenericAsyncRequest(
   grpc_call_details_init(&call_details_);
   GPR_ASSERT(notification_cq);
   GPR_ASSERT(call_cq);
-  grpc_server_request_call(
-      server->server(), &call_, &call_details_, context->client_metadata_.arr(),
-      call_cq->cq(), notification_cq->cq(), this,
-      context->has_notify_when_done_tag_, context->async_notify_when_done_tag_);
+  if (context_->has_notify_when_done_tag_) {
+    grpc_server_request_call(
+        server->server(), &call_, &call_details_,
+        context->client_metadata_.arr(), call_cq->cq(), notification_cq->cq(),
+        this, context->has_notify_when_done_tag_, context->completion_op_);
+  } else {
+    grpc_server_request_call(server->server(), &call_, &call_details_,
+                             context->client_metadata_.arr(), call_cq->cq(),
+                             notification_cq->cq(), this, false, nullptr);
+  }
 }
 
 bool ServerInterface::GenericAsyncRequest::FinalizeResult(void** tag,

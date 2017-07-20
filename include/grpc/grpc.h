@@ -27,8 +27,8 @@
 #include <grpc/impl/codegen/propagation_bits.h>
 #include <grpc/slice.h>
 #include <grpc/support/time.h>
-#include <stddef.h>
 #include <stdbool.h>
+#include <stddef.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -323,7 +323,8 @@ GRPCAPI grpc_call_error grpc_server_request_call(
     grpc_server *server, grpc_call **call, grpc_call_details *details,
     grpc_metadata_array *request_metadata,
     grpc_completion_queue *cq_bound_to_call,
-    grpc_completion_queue *cq_for_notification, void *tag_new, bool recv_close, void* recv_close_tag);
+    grpc_completion_queue *cq_for_notification, void *tag_new, bool recv_close,
+    void *recv_close_tag);
 
 /** How to handle payloads for a registered method */
 typedef enum {
@@ -353,7 +354,8 @@ GRPCAPI grpc_call_error grpc_server_request_registered_call(
     gpr_timespec *deadline, grpc_metadata_array *request_metadata,
     grpc_byte_buffer **optional_payload,
     grpc_completion_queue *cq_bound_to_call,
-    grpc_completion_queue *cq_for_notification, void *tag_new, bool recv_close, void* recv_close_tag);
+    grpc_completion_queue *cq_for_notification, void *tag_new, bool recv_close,
+    void *recv_close_tag);
 
 /** Create a server. Additional configuration for each incoming channel can
     be specified with args. If no additional configuration is needed, args can

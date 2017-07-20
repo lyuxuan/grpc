@@ -512,13 +512,18 @@ static void publish_call(grpc_exec_ctx *exec_ctx, grpc_server *server,
   server_ref(chand->server);
   grpc_cq_end_op(exec_ctx, calld->cq_new, rc->tag, GRPC_ERROR_NONE,
                  done_request_event, rc, &rc->completion);
-  // grpc_op close_op;
-  // memset(&close_op, 0, sizeof(close_op));
-  // close_op.op = GRPC_OP_RECV_CLOSE_ON_SERVER;
-  // close_op.data.recv_close_on_server.cancelled = &cancelled_;
-  // close_op.flags = 0;
-  // close_op.reserved = NULL;
-  // grpc_call_start_batch(call, &close_op, 1, void *tag, void *reserved);
+  grpc_op close_op;
+  memset(&close_op, 0, sizeof(close_op));
+  close_op.op = GRPC_OP_RECV_CLOSE_ON_SERVER;
+  close_op.data.recv_close_on_server.cancelled = grpc_call_get_cancelled_ptr(call);
+  close_op.flags = 0;
+  close_op.reserved = NULL;
+  if (rc->recv_close) {
+    // AsyncNotifyWhenDone is called
+    grpc_call_start_batch(call, &close_op, 1, rc->recv_close_tag, NULL);
+  } else {
+    grpc_call_start_batch_and_execute(exec_ctx, call, &close_op, 1, NULL);
+  }
 }
 
 static void publish_new_rpc(grpc_exec_ctx *exec_ctx, void *arg,
