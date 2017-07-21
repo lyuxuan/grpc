@@ -1381,9 +1381,9 @@ static grpc_call_error queue_call_request(grpc_exec_ctx *exec_ctx,
   call_data *calld = NULL;
   request_matcher *rm = NULL;
   int request_id;
-  if (rc->recv_close) {
-    grpc_cq_begin_op(server->cqs[cq_idx], rc->recv_close_tag);
-  }
+  // if (rc->recv_close) {
+  //   grpc_cq_begin_op(server->cqs[cq_idx], rc->recv_close_tag);
+  // }
   if (gpr_atm_acq_load(&server->shutdown_flag)) {
     fail_call(exec_ctx, server, cq_idx, rc,
               GRPC_ERROR_CREATE_FROM_STATIC_STRING("Server Shutdown"));
@@ -1634,8 +1634,8 @@ done:
   return error;
 }
 
-// static void done_request_event_dup(grpc_exec_ctx *exec_ctx, void *req,
-//                                    grpc_cq_completion *c) {}
+static void done_request_event_dup(grpc_exec_ctx *exec_ctx, void *req,
+                                   grpc_cq_completion *c) {}
 
 static void fail_call(grpc_exec_ctx *exec_ctx, grpc_server *server,
                       size_t cq_idx, requested_call *rc, grpc_error *error) {
@@ -1646,10 +1646,11 @@ static void fail_call(grpc_exec_ctx *exec_ctx, grpc_server *server,
   server_ref(server);
   grpc_cq_end_op(exec_ctx, server->cqs[cq_idx], rc->tag, error,
                  done_request_event, rc, &rc->completion);
-  // if (rc->recv_close) {
-  //   grpc_cq_end_op(exec_ctx, server->cqs[cq_idx], rc->recv_close_tag, error,
-  //                  done_request_event_dup, rc, &rc->recv_close_completion);
-  // }
+  if (rc->recv_close) {
+    grpc_cq_begin_op(server->cqs[cq_idx], rc->recv_close_tag);
+    grpc_cq_end_op(exec_ctx, server->cqs[cq_idx], rc->recv_close_tag, error,
+                   done_request_event_dup, rc, &rc->recv_close_completion);
+  }
 }
 
 const grpc_channel_args *grpc_server_get_channel_args(grpc_server *server) {

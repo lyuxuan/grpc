@@ -525,6 +525,9 @@ void grpc_cq_internal_unref(grpc_exec_ctx *exec_ctx,
 static void cq_begin_op_for_next(grpc_completion_queue *cq, void *tag) {
   cq_next_data *cqd = DATA_FROM_CQ(cq);
   GPR_ASSERT(!cqd->shutdown_called);
+  GRPC_API_TRACE(
+    "cq_begin_op_for_next(cq=%p, tag=%p)",
+    2, (cq,tag));
   gpr_atm_no_barrier_fetch_add(&cqd->pending_events, 1);
 }
 
