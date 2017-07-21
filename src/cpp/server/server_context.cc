@@ -54,7 +54,7 @@ class ServerContext::CompletionOp final : public internal::CallOpSetInterface {
     return CheckCancelledNoPluck();
   }
   bool CheckCancelledAsync() { return CheckCancelledNoPluck(); }
-
+  bool got_finalized() {return finalized_;}
   void set_tag(void* tag) {
     has_tag_ = true;
     tag_ = tag;
@@ -106,6 +106,7 @@ bool ServerContext::CompletionOp::FinalizeResult(void** tag, bool* status) {
     lock.unlock();
     delete this;
   }
+  printf("++++++++++++++++%d\n", ret);
   return ret;
 }
 
@@ -184,7 +185,8 @@ bool ServerContext::IsCancelled() const {
   //   // when using sync API
   //   return completion_op_ && completion_op_->CheckCancelled(cq_);
   // }
-  return grpc_call_get_cancelled(call_);
+  return completion_op_->got_finalized()? (call_ ? grpc_call_get_cancelled(call_) : true): false;
+
 }
 
 void ServerContext::AsyncNotifyWhenDone(void* tag) {

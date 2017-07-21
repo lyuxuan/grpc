@@ -518,12 +518,12 @@ static void publish_call(grpc_exec_ctx *exec_ctx, grpc_server *server,
   close_op.data.recv_close_on_server.cancelled = grpc_call_get_cancelled_ptr(call);
   close_op.flags = 0;
   close_op.reserved = NULL;
-  if (rc->recv_close) {
-    // AsyncNotifyWhenDone is called
+  // if (rc->recv_close) {
+  //   // AsyncNotifyWhenDone is called
+  //   grpc_call_start_batch(call, &close_op, 1, rc->recv_close_tag, NULL);
+  // } else {
     grpc_call_start_batch(call, &close_op, 1, rc->recv_close_tag, NULL);
-  } else {
-    grpc_call_start_batch_and_execute(exec_ctx, call, &close_op, 1, NULL);
-  }
+  // }
 }
 
 static void publish_new_rpc(grpc_exec_ctx *exec_ctx, void *arg,

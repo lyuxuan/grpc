@@ -668,7 +668,7 @@ void ServerInterface::RegisteredAsyncRequest::IssueRequest(
     grpc_server_request_registered_call(
         server_->server(), registered_method, &call_, &context_->deadline_,
         context_->client_metadata_.arr(), payload, call_cq_->cq(),
-        notification_cq->cq(), this, false, nullptr);
+        notification_cq->cq(), this, false, context_->completion_op_);
   }
 }
 
@@ -689,7 +689,7 @@ ServerInterface::GenericAsyncRequest::GenericAsyncRequest(
   } else {
     grpc_server_request_call(server->server(), &call_, &call_details_,
                              context->client_metadata_.arr(), call_cq->cq(),
-                             notification_cq->cq(), this, false, nullptr);
+                             notification_cq->cq(), this, false, context->completion_op_);
   }
 }
 
