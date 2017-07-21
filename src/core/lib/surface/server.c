@@ -1634,8 +1634,8 @@ done:
   return error;
 }
 
-static void done_request_event_dup(grpc_exec_ctx *exec_ctx, void *req,
-                                   grpc_cq_completion *c) {}
+// static void done_request_event_dup(grpc_exec_ctx *exec_ctx, void *req,
+//                                    grpc_cq_completion *c) {}
 
 static void fail_call(grpc_exec_ctx *exec_ctx, grpc_server *server,
                       size_t cq_idx, requested_call *rc, grpc_error *error) {
@@ -1646,10 +1646,10 @@ static void fail_call(grpc_exec_ctx *exec_ctx, grpc_server *server,
   server_ref(server);
   grpc_cq_end_op(exec_ctx, server->cqs[cq_idx], rc->tag, error,
                  done_request_event, rc, &rc->completion);
-  if (rc->recv_close) {
-    grpc_cq_end_op(exec_ctx, server->cqs[cq_idx], rc->recv_close_tag, error,
-                   done_request_event_dup, rc, &rc->recv_close_completion);
-  }
+  // if (rc->recv_close) {
+  //   grpc_cq_end_op(exec_ctx, server->cqs[cq_idx], rc->recv_close_tag, error,
+  //                  done_request_event_dup, rc, &rc->recv_close_completion);
+  // }
 }
 
 const grpc_channel_args *grpc_server_get_channel_args(grpc_server *server) {
